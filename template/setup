@@ -1,0 +1,62 @@
+#!/bin/bash
+DIRNAME=`dirname "$0"`
+CDNAME=INSERT_CDNAME
+
+
+echo "The running script has basename `basename "$0"`, dirname $DIRNAME"
+echo "The present working directory is `pwd`"
+
+pushd $DIRNAME
+echo "The present working directory is now changed to `pwd`"
+
+echo preparing $CDNAME image into $APOLLO_DATA/$CDNAME
+
+mkdir -p $APOLLO_DATA/$CDNAME
+mkdir -p $APOLLO_DATA/$CDNAME/res
+mkdir -p $APOLLO_CONFD/scripts/setup.d
+mkdir -p $APOLLO_CONFD/scripts/onboot.d
+cp -f $CDNAME $CDNAME-idl.conf $APOLLO_DATA/$CDNAME/
+chown -R apollo:apollo $APOLLO_DATA/$CDNAME
+chown -R apollo:apollo $APOLLO_DATA/$CDNAME/res
+chown -R apollo:apollo $APOLLO_CONFD/scripts/setup.d
+chown -R apollo:apollo $APOLLO_CONFD/scripts/onboot.d
+chmod u=rwx,g=rw,o=r $APOLLO_DATA/$CDNAME/res
+chmod u=rwx,g=rwx,o=rx $APOLLO_CONFD/scripts/setup.d
+chmod u=rwx,g=rwx,o=rx $APOLLO_CONFD/scripts/onboot.d
+chmod u=r,g=r,o=r $APOLLO_DATA/$CDNAME/$CDNAME-idl.conf
+chmod u=rx,g=rx,o=rx $APOLLO_DATA/$CDNAME/$CDNAME
+setcap cap_net_admin,cap_net_bind_service,cap_net_raw,cap_sys_resource,cap_sys_time=eip $APOLLO_DATA/$CDNAME/$CDNAME
+cp -f $CDNAME-xif-setup.sh $APOLLO_CONFD/scripts/setup.d/
+chown apollo:apollo $APOLLO_CONFD/scripts/setup.d/$CDNAME-xif-setup.sh
+chmod u=rwx,g=rwx,o=rx $APOLLO_CONFD/scripts/setup.d/$CDNAME-xif-setup.sh
+cp -f $CDNAME-onboot.sh $APOLLO_CONFD/scripts/onboot.d/
+chown apollo:apollo $APOLLO_CONFD/scripts/onboot.d/$CDNAME-onboot.sh
+chmod u=rwx,g=rwx,o=rx $APOLLO_CONFD/scripts/onboot.d/$CDNAME-onboot.sh
+cp -f $CDNAME-reset.sh $APOLLO_CONFD/scripts/reset.d/
+chown apollo:apollo $APOLLO_CONFD/scripts/reset.d/$CDNAME-reset.sh
+chmod u=rwx,g=rwx,o=rx $APOLLO_CONFD/scripts/reset.d/$CDNAME-reset.sh
+
+echo setting up $CDNAME service
+cp -f $CDNAME.conf /etc/supervisor/conf.d/$CDNAME.conf
+chown :apollo /etc/supervisor/conf.d/$CDNAME.conf
+chmod u=rwx,g=rw,o=r /etc/supervisor/conf.d/$CDNAME.conf
+CDRIVERCONF=/etc/supervisor/conf.d/cdriver.conf
+CDRIVERCONFTEMPLATE=cdriver.conf
+if [ -f $CDRIVERCONF ]; then
+    grep -qw $CDNAME $CDRIVERCONF
+    if [ $? -ne 0 ]; then 
+        echo $0: updating $CDRIVERCONF to add $CDNAME
+        sed -i '/^programs:\b/ s/$/,'"$CDNAME"'/' $CDRIVERCONF
+    else
+        echo $0: $CDNAME is already in cdriver group in $CDRIVERCONF 
+    fi
+else
+    echo $0: $CDRIVERCONF not found.  Copying $CDRIVERCONFTEMPLATE to $CDRIVERCONF
+    cp -p $CDRIVERCONFTEMPLATE $CDRIVERCONF
+fi
+chown :apollo $CDRIVERCONF
+chmod u=r,g=r,o=r $CDRIVERCONF 
+supervisorctl update
+
+popd
+echo $CDNAME service setup completed

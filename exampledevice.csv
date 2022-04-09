@@ -1,0 +1,9 @@
+#filetype,example_xif
+#program_ID,9B0001050004EC00
+#manufacturer,Dialog
+#description,exampledevice xif
+Datapoint Name,IAP Type,Direction,Address,Myfield1,Myfield2
+Counter_A,SNVT_count,input,0,F6,02
+Counter_B,SNVT_count,input,1,F6,02
+Counter_C,SNVT_count,output,2,F6,02
+Counter_D,SNVT_count,output,3,F6,02

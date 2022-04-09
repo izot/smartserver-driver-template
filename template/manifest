@@ -1,0 +1,12 @@
+{
+    "version": "INSERT_CDVERSION",
+    "issuer": "INSERT_CDMANUFACTURER",
+    "description": "INSERT_CDDESC",
+    "readme": "https://dialogwiki.atlassian.net/wiki/spaces/DrftSSIoT/pages/2073853966/Creating+Custom+Drivers",
+    "method": "setup",
+    "imgpwd": null,
+    "integrity": "SHA256",
+    "checksum": "INSERT_SHA256",
+    "image": "image.zip",
+    "flags": null
+}
