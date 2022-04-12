@@ -1,12 +1,20 @@
+#include <time.h>
+#include <stdlib.h>
+#include <cassert>
+#include <unistd.h>
+
 #include "libidl.h"
 #include "example.h"
-#include <unistd.h>
 
 #ifndef CDNAME
 #error Must define CDNAME when compiling this example.cpp file
 #endif
 
 extern Idl *idl;
+
+// For this example there is only one activeCB.  In real-life driver this
+// should be a linked list of activeCBs and the IdiProcAsynchThreadFunction
+// will cycle through the list of activeCBs until no more available.
 static IdiActiveCB activeCB;
 
 // Dummy value and priority array for sake of this CDNAME
@@ -14,6 +22,11 @@ static IdiActiveCB activeCB;
 
 double dpValue = 0;
 char *prio_array = NULL;
+
+
+static int IdiBlockWhileBusy(IdiActiveCB& pActCb);
+static int IdiGenericResultFsm(IdiActiveCB& pActCb);
+
 
 /* IdiStart: Custom driver startup function called from main.cpp  */
 
@@ -29,91 +42,13 @@ int IdiStart()
     return 0;
 }
 
-/* IdiRxThreadFunction: Example thread called from main.cpp to allow  */
-/* this custom driver to receive and process async incoming packets.   */
-
-void *IdiRxThreadFunction(void* argA)
-{
-    printf("The " CDNAME " IDI Rx driver thread started...\r\n");
-    while(1)
-    {
-		/* Custom code to receive & process incoming packets */
-
-		usleep(50000); 			// 50 ms
-    }
-
-    return NULL;
-}
-
-static int IdiGenericResultFsm(void)
-{
-    int iRet = 0;
-    switch(activeCB.action) {
-        case IdiaNone:
-            break;
-        case IdiaDpwrite:
-            /*
-             *  Do our write
-             */
-            dpValue = activeCB.value;
-            printf(" Value written: %lf\n", dpValue);
-            IdlDpWriteResult(activeCB.ReqIndex, activeCB.dev, activeCB.dp, IErr_Success);
-            activeCB.action = IdiaNone;
-            break;
-        case IdiaDpread:
-                /*
-                 *  Do our read
-                 */
-                activeCB.action = IdiaNone;
-                printf(" Value read: %lf\n", dpValue);
-                IdlDpReadResult(activeCB.ReqIndex, activeCB.dev, 
-                    activeCB.dp, activeCB.context, IErr_Success, prio_array, dpValue);
-            break;
-        case IdiaProvision:
-            /*
-             *  Provision our device
-             */
-            activeCB.action = IdiaNone;
-            IdlDevProvisionResult(activeCB.ReqIndex, activeCB.dev, IErr_Success);
-            break;
-        default:
-            activeCB.action = IdiaNone;     // unknown, clear it.
-            break;
-    }
-    return iRet;
-}
-
-static int IdiBlockWhileBusy(uint tmos) {
-    int iRet = 0;
-    if (activeCB.action != IdiaNone) {
-        time_t timeStart = time(NULL);
-        while (activeCB.action != IdiaNone) {
-            IdiGenericResultFsm();
-            // check again -
-            if (activeCB.action == IdiaNone) {
-                break;
-            }
-            if ((uint) (time(NULL) - timeStart) >= tmos) {
-                printf("%s: Timed out - UNID: %s, action: %d", __FUNCTION__, 
-                    (activeCB.dev->unid) ? activeCB.dev->unid : "NULL", activeCB.action);
-                if (activeCB.action != IdiaProvision) {     // IdiaProvision has its own timeouts.
-                    activeCB.action = IdiaNone;
-                }
-                iRet = -1;
-                break;
-            }
-            usleep(30000); // 30 ms
-        }
-    }
-    return iRet;
-}
-
 /* dp_read_cb: Callback function registered with the IDL Library  */
 /* which triggers when a data point read occurs.  This checks if  */
 /* the custom driver (idi) is busy and if not simulates a dp read.*/
 
 int dp_read_cb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context)
 {
+    int idlError = IErr_Success;
     printf("\n%s:\n", __FUNCTION__);			// Print out the called function to the console
 	
     printf(" dev.info.product: %s\n"				// Print out selected fields to the console
@@ -124,20 +59,22 @@ int dp_read_cb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context)
         dp->name
     );
 
-    if (IdiBlockWhileBusy(IDI_ACTION_DP_TIMEOUT)) {
-        return IErr_IdiBusy;
+    if (activeCB.action == IdiaNone) {
+        // Setup read
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaDpread;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.dp = dp;
+        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
+        activeCB.context = context;
     }
-    // Setup read
-    activeCB.action = IdiaDpread;
-    activeCB.ReqIndex = request_index;
-    activeCB.dev = dev;
-    activeCB.dp = dp;
-    activeCB.context = context;
-    if (IdiBlockWhileBusy(IDI_ACTION_DP_TIMEOUT)) {
-        return IErr_IdiBusy;
+    else {
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
-    return IErr_Success;
 
+    return idlError;
 }
 
 /* dp_write_cb: Callback function registered with the IDL Library */
@@ -158,20 +95,23 @@ int dp_write_cb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio, int 
         dp->name
     );
 
-    if (IdiBlockWhileBusy(IDI_ACTION_DP_TIMEOUT)) {
-        return IErr_IdiBusy;
+    if (activeCB.action == IdiaNone) {
+        // Setup write
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaDpwrite;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.dp = dp;
+        activeCB.prio = prio;
+        activeCB.relinquish = relinquish;
+        activeCB.value = value;
+        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
     }
-    // Setup write
-    activeCB.action = IdiaDpwrite;
-    activeCB.ReqIndex = request_index;
-    activeCB.dev = dev;
-    activeCB.dp = dp;
-    activeCB.prio = prio;
-    activeCB.relinquish = relinquish;
-    activeCB.value = value;
-    if (IdiBlockWhileBusy(IDI_ACTION_DP_TIMEOUT)) {
-        return IErr_IdiBusy;
+    else {
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
+
     return idlError;
 }
 
@@ -202,16 +142,20 @@ int dev_create_cb(int request_index, IdlDev *dev, char *args, char *xif_dp_array
 		(args) ? args : "NULL"
     );
 	  
-    if (dev && dev->handle) {
-        /*
-         *  Create a device
-         */
-    } else {
-        printf("%s: Malformed IdlDev", __FUNCTION__);
-        idlError = IErr_Failure;
+    if (activeCB.action == IdiaNone) {
+        // Setup provision
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaCreate;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.args = args;
+        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
     }
-    IdiFree(args);      // required
-    IdlDevCreateResult(request_index, dev, idlError);
+    else {
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
+    }
+
     return idlError;
 }
 
@@ -243,16 +187,20 @@ int dev_provision_cb(int request_index, IdlDev *dev, char *args)
 		(args) ? args : "NULL"
     );
 
-    if (IdiBlockWhileBusy(IDI_ACTION_DP_TIMEOUT)) {
-        return IErr_IdiBusy;
+    if (activeCB.action == IdiaNone) {
+        // Setup provision
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaProvision;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.args = args;
+        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
     }
-    activeCB.action = IdiaProvision;
-    activeCB.ReqIndex = request_index;
-    activeCB.dev = dev;
-    activeCB.args = args;
-    if (IdiBlockWhileBusy(IDI_ACTION_DP_TIMEOUT)) {
-        return IErr_IdiBusy;
+    else {
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
+
     return idlError;
 }
 
@@ -283,11 +231,23 @@ int dev_deprovision_cb(int request_index, IdlDev *dev)
         dev->type
     );
 
-    /*
-     *  Deprovision this device
-     */
-	 
-    IdlDevDeprovisionResult(request_index, dev, idlError);
+    if (activeCB.action == IdiaNone) {
+        // Setup deprovision
+
+        /*
+        *  Deprovision this device
+        */
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaDeprovision;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
+    }
+    else {
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
+    }
+
     return idlError;
 }
 
@@ -320,13 +280,26 @@ int dev_replace_cb(int request_index, IdlDev *dev, char *args)
         dev->type,
 		(args) ? args : "NULL"
     );
-				
-    /*
-     *  Slot in the new device and deprovision the old device
-     */
-	 
-    IdiFree(args);
-    IdlDevReplaceResult(request_index, dev, idlError);
+
+    if (activeCB.action == IdiaNone) {
+        // Setup replace
+
+        /*
+        *  Slot in the new device and deprovision the old device
+        */
+        
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaReplace;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.args = args;
+        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
+    }
+    else {
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
+    }
+
     return idlError;
 }
 
@@ -355,10 +328,245 @@ int dev_delete_cb(int request_index, IdlDev *dev)
         dev->type
     );
 
-    /*
-     *  Delete this device
-     */
+    if (activeCB.action == IdiaNone) {
+        // Setup delete
 
-    IdlDevDeleteResult(request_index, dev, idlError);
+        /*
+        *  Delete this device
+        */
+
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaDelete;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
+    }
+    else {
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
+    }
+
     return idlError;
 }
+
+/* Returns an integer in the range [0, n).
+ *
+ * Uses rand(), and so is affected-by/affects the same seed.
+ */
+uint randint(uint n) {
+    // Chop off all of the values that would cause skew...
+    int end = RAND_MAX / n; // truncate skew
+    assert (end > 0);
+    end *= n;
+
+    // ... and ignore results from rand() that fall above that limit.
+    // (Worst case the loop condition should succeed 50% of the time,
+    // so we can expect to bail out of this loop pretty quickly.)
+    int r;
+    while ((r = rand()) >= end);
+
+    return r % n;
+}
+
+/* IsProcessingDone: a function returning true 60% of a time to simulate a busy condition */
+bool IsProcessingDone() {
+    uint digit =  randint(9);
+    // printf("random digit: %u\n", digit);
+    return (digit < 6) ? true : false;
+}
+
+
+/* IdiProcAsynchThreadFunction: Example thread called from main.cpp to */
+/*  allow typical custom driver to receive and process async incoming  */
+/*  I/O data.  In this example, this routine is used to drive an FSM   */
+/*  code to simulate asynchronous processing of any callback routines. */
+
+void *IdiProcAsynchThreadFunction(void* argA)
+{
+    printf("The " CDNAME " IDI Process Asynchronous Requests driver thread started...\r\n");
+
+    srand(time(NULL));   // Initialization, should only be called once.
+
+    while(1)
+    {
+		/* Custom code for processing callback requests asynchronously */
+        /* Ideally we should implement an adaquate queue of activeCBs  */
+        IdiBlockWhileBusy(activeCB);
+
+
+		usleep(50000); 			// 50 ms
+    }
+
+    return NULL;
+}
+
+int IdiGenericResultFsm(IdiActiveCB& aCB)
+{
+    int idlError = IErr_Success;
+
+    switch(aCB.action) {
+        case IdiaNone:
+            break;
+        case IdiaCreate:
+            if (aCB.dev && aCB.dev->handle) {
+                /*
+                *  Create a device
+                */
+               if (!IsProcessingDone()) {
+                   /* simulate a busy condition (not done) */
+                   idlError = IErr_IdiBusy;
+               }
+            } else {
+                printf("%s: Malformed IdlDev", __FUNCTION__);
+                idlError = IErr_Failure;
+            }
+
+            if (idlError != IErr_IdiBusy) {
+                IdiFree(aCB.args);      // required
+                IdlDevCreateResult(aCB.ReqIndex, aCB.dev, idlError);
+                aCB.action = IdiaNone;
+            }
+            break;
+        case IdiaDelete:
+            if (aCB.dev && aCB.dev->handle) {
+                /*
+                *  Delete a device
+                */
+               if (!IsProcessingDone()) {
+                   /* simulate a busy condition (not done) */
+                   idlError = IErr_IdiBusy;
+               }
+            } else {
+                printf("%s: Malformed IdlDev", __FUNCTION__);
+                idlError = IErr_Failure;
+            }
+
+            if (idlError != IErr_IdiBusy) {
+                IdiFree(aCB.args);      // required
+                IdlDevDeleteResult(aCB.ReqIndex, aCB.dev, idlError);
+                aCB.action = IdiaNone;
+            }
+            break;
+        case IdiaReplace:
+            if (aCB.dev && aCB.dev->handle) {
+                /*
+                *  Replace a device
+                */
+               if (!IsProcessingDone()) {
+                   /* simulate a busy condition (not done) */
+                   idlError = IErr_IdiBusy;
+               }
+            } else {
+                printf("%s: Malformed IdlDev", __FUNCTION__);
+                idlError = IErr_Failure;
+            }
+
+            if (idlError != IErr_IdiBusy) {
+                IdiFree(aCB.args);      // required
+                IdlDevReplaceResult(aCB.ReqIndex, aCB.dev, idlError);
+                aCB.action = IdiaNone;
+            }
+            break;
+        case IdiaDpwrite:
+            /*
+             *  Do our write
+             */
+            if (IsProcessingDone()) {
+                dpValue = aCB.value;
+                printf(" Value written: %lf\n", dpValue);
+                IdlDpWriteResult(aCB.ReqIndex, aCB.dev, aCB.dp, IErr_Success);
+                aCB.action = IdiaNone;
+            }
+            else {
+                /* simulate a busy condition (not done) */
+                idlError = IErr_IdiBusy;
+            }
+            break;
+        case IdiaDpread:
+            /*
+             *  Do our read
+             */
+            if (IsProcessingDone()) {
+                aCB.action = IdiaNone;
+                printf("%s Value read: %lf\n", 
+                        (aCB.lastError == IErr_IdiBusy) ? ".done\n" : "",
+                        dpValue);
+                IdlDpReadResult(aCB.ReqIndex, aCB.dev, 
+                    aCB.dp, aCB.context, IErr_Success, prio_array, dpValue);
+            }
+            else {
+                /* simulate a busy condition (not done) */
+                idlError = IErr_IdiBusy;
+            }
+            break;
+        case IdiaProvision:
+            /*
+             *  Provision our device
+             */
+            if (IsProcessingDone()) {
+                aCB.action = IdiaNone;
+                IdlDevProvisionResult(aCB.ReqIndex, aCB.dev, IErr_Success);
+            }
+            else {
+                /* simulate a busy condition (not done) */
+                idlError = IErr_IdiBusy;
+            }
+            break;
+        case IdiaDeprovision:
+            /*
+             *  Deprovision our device
+             */
+            if (IsProcessingDone()) {
+                aCB.action = IdiaNone;
+                IdlDevDeprovisionResult(aCB.ReqIndex, aCB.dev, IErr_Success);
+            }
+            else {
+                /* simulate a busy condition (not done) */
+                idlError = IErr_IdiBusy;
+            }
+            break;
+        default:
+            aCB.action = IdiaNone;     // unknown, clear it.
+            break;
+    }
+    aCB.lastError = idlError;       // remember last processing error
+    return idlError;
+}
+
+// This implementation is not ideal..
+// An ideal custom driver should not be blocking the FSM while processing a long callback..
+// The while loop below with its sleep function call should be avoided if possible.
+int IdiBlockWhileBusy(IdiActiveCB& aCB) {
+    int idlError = IErr_Success;
+
+    bool newAction = true;
+    if (aCB.action != IdiaNone) {
+        time_t timeStart = time(NULL);
+        while (aCB.action != IdiaNone) {
+            IdiGenericResultFsm(aCB);
+            // check again -
+            if (aCB.action == IdiaNone) {
+                break;
+            }
+            else {
+                if (newAction) {
+                    printf(" Random delay.");
+                    newAction = false;
+                }
+                else {
+                    printf(".");
+                }
+                if ((uint) (time(NULL) - timeStart) >= aCB.timeout) {
+                    printf("\n%s: Timed out - UNID: %s, action: %d\n", __FUNCTION__, 
+                        (aCB.dev->unid) ? aCB.dev->unid : "NULL", aCB.action);
+                    idlError = IErr_Failure;
+                    break;
+                }
+                usleep(10000); // 10 ms
+            }
+        }
+    }
+    return idlError;
+}
+
+

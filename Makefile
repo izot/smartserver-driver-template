@@ -34,7 +34,7 @@ CROSS_COMPILER=arm-linux-gnueabihf-
 INCLUDES = -I$(IDI_PATH)/src
 INCLUDES += -I$(IDI_PATH)/src/idl/include
 INCLUDES += -L$(IDI_PATH)/src/idl/lib
-CFLAGS += -g -Wall $(INCLUDES) -DCDNAME=\"$(CDNAME)\" -DCDRXTHREAD=\"$(CDRXTHREAD)\" -DCDRXFUNCTION=\"$(CDRXFUNCTION)\"
+CFLAGS += -g -Wall $(INCLUDES) -DCDNAME=\"$(CDNAME)\"
 LIBS=-lidl -lmosquitto -lpthread -lrt $(CDLIBS)
 
 CSRC = src/main.cpp $(CDSOURCES)

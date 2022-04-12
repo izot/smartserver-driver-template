@@ -9,7 +9,7 @@
 int main(void)
 {
     char conf_path[256] ="/var/apollo/data/" CDNAME "/" CDNAME "-idl.conf";
-    pthread_t IdiRxThread;
+    pthread_t IdiProcessAsynchThread;
 
     Idl *idl = IdlNew();		// Create a new driver instance
 
@@ -31,7 +31,7 @@ int main(void)
 		/* creates a thread that could be used to process asynchronous     */
 		/* communications packets the driver needs to capture and process. */
 
-        pthread_create( &IdiRxThread, NULL, IdiRxThreadFunction, NULL);
+        pthread_create( &IdiProcessAsynchThread, NULL, IdiProcAsynchThreadFunction, NULL);
 
 		/* Initialize the IDL CDNAME Driver using the parameters defined */
 		/* in CDNAME-idl.conf configuration file. IdlInit() never exits. */

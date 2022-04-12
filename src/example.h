@@ -4,13 +4,18 @@
 #include <stdlib.h>
 
 #define IdiFree(x) {if (x) { free(x); x = NULL;}}
-#define IDI_ACTION_DP_TIMEOUT 30
+#define IDI_ACTION_NORMAL_TIMEOUT   30
+#define IDI_ACTION_LONG_TIMEOUT     50
 
 typedef enum {
     IdiaNone = 0,
+    IdiaCreate,
     IdiaProvision,
+    IdiaDeprovision,
+    IdiaReplace,
     IdiaDpread,
     IdiaDpwrite,
+    IdiaDelete,
     Ida_last
 } IdiAction;
 
@@ -24,11 +29,13 @@ typedef struct _IdiActiveCB {
     int ReqIndex;
     IdlDev* dev;
     IdlDatapoint* dp;
+    uint timeout;          // time out in milliseconds
+    int lastError;
     void* context;
 } IdiActiveCB;
 
 int IdiStart();
-extern void *IdiRxThreadFunction(void* argA);
+extern void *IdiProcAsynchThreadFunction(void* argA);
 
 /* CALLBACKS */
 int dp_read_cb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context);
