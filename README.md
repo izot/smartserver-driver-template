@@ -1,5 +1,5 @@
 # smartserver-driver-template
-Example custom driver template for Renesas' SmartServer IoT Edge Server. Documentation is available at http://iecdocs.diasemi.com.
+Example custom driver template for the Dialog SmartServer IoT Edge Server (Dialog Semiconductor is a Renesas Electronics company). Documentation is available at http://iecdocs.renesas.com.
 
 Create and test a custom driver for the SmartServer IoT by following these steps:
 
