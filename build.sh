@@ -3,7 +3,7 @@
 IDI_PATH=$1
 CDNAME=$2
 CDDESC=$3
-CDLIMIT=$4
+CDDEVLIMIT=$4
 CDVERSION=$5
 CDFILETYPE=$6
 CDEXTENSION=$7
@@ -34,7 +34,7 @@ sed -i ':a;s/INSERT_CDNAME/'"$CDNAME"'/;ta;' $RELEASE_PATH/image/$CDNAME.conf
 sed -i 's/INSERT_CDNAME/'"$CDNAME"'/' $RELEASE_PATH/image/cdriver.conf
 sed -i ':a;s/INSERT_CDNAME/'"$CDNAME"'/;ta;' $RELEASE_PATH/image/$CDNAME-idl.conf
 sed -i ':a;s/INSERT_CDDESC/'"$CDDESC"'/;ta;' $RELEASE_PATH/image/$CDNAME-idl.conf
-sed -i ':a;s/INSERT_CDLIMIT/'$CDLIMIT'/;ta;' $RELEASE_PATH/image/$CDNAME-idl.conf
+sed -i ':a;s/INSERT_CDDEVLIMIT/'$CDDEVLIMIT'/;ta;' $RELEASE_PATH/image/$CDNAME-idl.conf
 sed -i ':a;s/INSERT_CDVERSION/'"$CDVERSION"'/;ta;' $RELEASE_PATH/image/$CDNAME-idl.conf
 sed -i ':a;s/INSERT_CDFILETYPE/'"$CDFILETYPE"'/;ta;' $RELEASE_PATH/image/$CDNAME-idl.conf
 sed -i ':a;s/INSERT_CDEXTENSION/'"$CDEXTENSION"'/;ta;' $RELEASE_PATH/image/$CDNAME-idl.conf

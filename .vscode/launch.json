@@ -1,0 +1,39 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // change the CDCFLAGS= in your Makefile to CDCFLAGS=-Og -ggdb and then rebuild
+            // sudo apt update
+            // sudo apt install -y gdb
+            // ps axf | grep -w test | grep -v grep | awk '{print "sudo gdbserver :10000 --attach " $1}' | sh
+            // sudo ufw allow 10000
+            "name": "Attach to Apollo (gdb) Launch",
+            "type": "cppdbg",
+            "request": "launch",
+            "stopAtEntry": true,
+            "program": "${workspaceFolder}/build/release/test",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb-multiarch",
+            "miDebuggerServerAddress": "192.168.100.14:10000",
+            "setupCommands": [
+                {
+                    "description": "Setup to resolve symbols",
+                    "text": "set sysroot /home/iphan/depot/system-image/Sysroot/apollo-master-3.40.109.armv7l",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

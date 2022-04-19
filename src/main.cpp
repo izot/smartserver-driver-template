@@ -15,13 +15,19 @@ int main(void)
 
     /* Register the CDNAME Driver Callback Routines with the IAP Driver Library (IDL) */
 	
-    IdlDevCreateCallbackSet(idl, dev_create_cb);
-    IdlDevProvisionCallbackSet(idl, dev_provision_cb);
-    IdlDevDeprovisionCallbackSet(idl, dev_deprovision_cb);
-    IdlDevReplaceCallbackSet(idl, dev_replace_cb);
-    IdlDevDeleteCallbackSet(idl, dev_delete_cb);
-    IdlDpReadCallbackSet(idl, dp_read_cb);
-    IdlDpWriteCallbackSet(idl, dp_write_cb);
+    IdlDevCreateCallbackSet(idl, OnDevCreateCb);
+    IdlDevProvisionCallbackSet(idl, OnDevProvisionCb);
+    IdlDevDeprovisionCallbackSet(idl, OnDevDeprovisionCb);
+    IdlDevReplaceCallbackSet(idl, OnDevReplaceCb);
+    IdlDevDeleteCallbackSet(idl, OnDevDeleteCb);
+    IdlDpReadCallbackSet(idl, OnDpReadCb);
+    IdlDpWriteCallbackSet(idl, OnDpWriteCb);
+    IdlDpAsciiReadCallbackSet(idl, OnDpReadExCb);
+    IdlDpAsciiWriteCallbackSet(idl, OnDpWriteExCb);
+    IdlDpCreateCallbackSet(idl, OnDpCreateCb);
+    #ifdef OLD_API
+    IdlDpUnrecColumnCallbackSet(idl, OnUnrecColumnCb);
+    #endif
 
     if (IdiStart() == 0) {
         printf("The " CDNAME " IDL Driver started up...\r\n");

@@ -335,6 +335,7 @@ typedef enum {
     Err_DevCommFail,
     Err_DiscovWriteFail,
     Err_AsciiWriteFail,
+    Err_AsciiCallbackFunctionsFail,
     Err_Max
 } ERR_STR_INDEX;
 
@@ -572,6 +573,7 @@ int IdlPollFirstDp(IdlDev *dev, pollRequestType type);
 int IdlPublishOnDemandReadValue(IdlDev *dev, IdlInterfaceBlock *ifblock, IdlIapDatapoint *iapdp);
 void IdlEventDrivenMonitoringLoop(void);
 IdlIapDatapoint *IdlGetIapDatapointByName(IdlDev *dev, char *dpName, char *blockName, int *blockIndex);
+int IdlSendCustomDriverDpData(IdlDev *dev);
 
 /* DEVICE DISCOVERY RELATED FUNTIONS */
 int IdlCreateDiscoveryData(void);

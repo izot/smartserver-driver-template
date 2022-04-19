@@ -336,6 +336,7 @@ typedef struct _IdlDpInfo {
     char *actualStringValue;
     char *actualNativeValue;
     char *rawStringValue;
+    char *unrecColumnData;
     PriorityArray pArr[NORMAL_PRIO];
     long long lastReadTimeMs;
     IapTypeEnumObj iapEnum;
@@ -536,6 +537,7 @@ typedef struct _Idl {
     int (*DpAsciiRead)(int, IdlDev *, IdlDatapoint *, void *);
     int (*DpAsciiWrite)(int, IdlDev *, IdlDatapoint *, int, int, char *);
     int (*OnUnrecColumn)(int , IdlDatapoint *, char *);
+    int (*OnDpCreate)(int, IdlDev *, IdlDatapoint *, char *);
     IdlErrorCodes (*DpEnableEvent)(int, IdlDev *, IdlDatapoint *);
     IdlErrorCodes (*DpDisableEvent)(int, IdlDev *, IdlDatapoint *);
     int (*ModbusPortFn)(int, ModbusPortInfo);
@@ -564,6 +566,7 @@ int IdlDevDiscoveryCallbackSet(Idl *idl, void *driverInstanceContext,
         DiscoveryCallbackType dcbFunctionType, DeviceDiscoveryCallbackFPtr dcbFunction);
 void IdlModbusPortCallbackSet(Idl *idl, int (*ModbusPortFn)(int, ModbusPortInfo));
 void IdlDpUnrecColumnCallbackSet(Idl *idl,int (*OnUnrecColumn)(int , IdlDatapoint *, char *));
+void IdlDpCreateCallbackSet(Idl *idl,int (*OnDpCreate)(int , IdlDev *, IdlDatapoint *, char *));
 
 /* Result APIs */
 void IdlDevCreateResult(int callbackIndex, IdlDev *dev, int idlError);

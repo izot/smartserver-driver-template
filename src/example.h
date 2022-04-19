@@ -21,7 +21,8 @@ typedef enum {
 
 // Various IDL 'result' bits
 typedef struct _IdiActiveCB {
-    double value;
+    double dValue;
+    char *rawStringValue;
     char *args;
     int prio;
     int relinquish;
@@ -34,16 +35,23 @@ typedef struct _IdiActiveCB {
     void* context;
 } IdiActiveCB;
 
-int IdiStart();
+extern int IdiStart();
+
 extern void *IdiProcAsynchThreadFunction(void* argA);
 
 /* CALLBACKS */
-int dp_read_cb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context);
-int dp_write_cb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio, int relinquish, double value);
-int dev_create_cb(int request_index, IdlDev *dev, char *args, char *xif_dp_array);
-int dev_provision_cb(int request_index, IdlDev *dev, char *args);
-int dev_deprovision_cb(int request_index, IdlDev *dev);
-int dev_replace_cb(int request_index, IdlDev *dev, char *args);
-int dev_delete_cb(int request_index, IdlDev *dev);
+extern int OnDpReadCb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context);
+extern int OnDpReadExCb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context);
+extern int OnDpWriteCb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio, int relinquish, double value);
+extern int OnDpWriteExCb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio, int relinquish, char *value);
+extern int OnDpCreateCb(int  request_index, IdlDev *dev, IdlDatapoint *dp, char *cpUnrecognizedColumns);
+extern int OnDevCreateCb(int request_index, IdlDev *dev, char *args, char *xif_dp_array);
+extern int OnDevProvisionCb(int request_index, IdlDev *dev, char *args);
+extern int OnDevDeprovisionCb(int request_index, IdlDev *dev);
+extern int OnDevReplaceCb(int request_index, IdlDev *dev, char *args);
+extern int OnDevDeleteCb(int request_index, IdlDev *dev);
+#ifdef OLD_API
+extern int OnUnrecColumnCb(int request_index, IdlDatapoint *dp, char *cpUnrecogCols);
+#endif
 
 #endif
