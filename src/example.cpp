@@ -1,14 +1,6 @@
-#include <time.h>
-#include <stdlib.h>
-#include <cassert>
-#include <unistd.h>
-#include <string.h>
-#include <cstring>
-
-#include "IdlCommon.h"
-#include "cJSON.h"
-#include "libidl.h"
+#include "common.h"
 #include "example.h"
+
 
 #ifndef CDNAME
 #error CDNAME must be defined in Makefile
@@ -28,36 +20,7 @@ extern Idl *idl;
 // will cycle through the list of activeCBs until no more available.
 static IdiActiveCB activeCB;
 
-// Local storage
-typedef cJSON *T_DataPoint; 
-
-typedef struct {
-    // pDpValue point to an entry in pDpValueStorage (via dp->address where one or more dp may  
-    // use the same dp->address for feedback/loopback (one dp with R/W and the other R/O access)
-    T_DataPoint *pDpValue;
-    uint address;                           // used in eti example as register number/address 
-    double testMultiplier;                  // used in the example for showcasing XIF custom/unrecognized column
-} T_DataPointStruc, *T_DataPointStrucVector;
-
-#define MAX_UNID_CHARS 132
-typedef struct _DeviceStorageStruc {
-    char devUniqeId[MAX_UNID_CHARS+1];      // per device device id max 132 characters plus a null terminator
-    uint devDpEntry;                        // per device current datapoint entry/count
-    uint devDpTotalCount;                   // per device total datapoint count
-    T_DataPoint *pDpValueStorage;           // point to the begining of per device JSON dp values vector
-    T_DataPointStrucVector pDevDpStorage;   // point to the begining of per device datapoint struct vector
-    static uint deviceEntry;                // shared variable for current device entry/count - up to CDDEVLIMIT
-} T_DeviceStorageStruc, *T_DeviceStoragePtr;
-
-typedef struct _DeviceStorageNodePtr {
-    T_DeviceStoragePtr     pDevStorageStruct;
-    _DeviceStorageNodePtr *pPrevious;
-    _DeviceStorageNodePtr *pNext;
-} T_DeviceStorageNode, *T_DevStorageNodePtr;
-
-
-uint T_DeviceStorageStruc::deviceEntry = 0;  // initializing shared variable.
-static T_DevStorageNodePtr pLocDevStorageHead = NULL;
+static T_DrvInfo gDrvInfo = {};
 
 
 // Dummy value and priority array for sake of this driver
@@ -83,6 +46,10 @@ int IdiStart()
 
 	printf("The " CDNAME " IDL driver is connected and ready...\n");
 
+#ifdef INCLUDE_ETI
+    EtiInit(&gDrvInfo);
+#endif
+
     return 0;
 }
 
@@ -93,24 +60,24 @@ static int DpSetCustomIdiDpData(IdlDev *dev, IdlDatapoint *dp)
     if (!dp->idiDpData) {
         if (dev->idiDevData) {
             uint address = dp->address;
-            T_DeviceStoragePtr pDevEntry = (T_DeviceStoragePtr)(dev->idiDevData);
-            if (pDevEntry->devDpEntry < pDevEntry->devDpTotalCount &&
-                address < pDevEntry->devDpTotalCount) {
+            T__DevStoPtr pDevEntry = (T__DevStoPtr)(dev->idiDevData);
+            if (pDevEntry->devDpEntry < pDevEntry->devDpCounts &&
+                address < pDevEntry->devDpCounts) {
                 // initialize local datapoint storage and idiDpData to point to this entry in storage vector
-                T_DataPointStruc *pDpStruct = &pDevEntry->pDevDpStorage[pDevEntry->devDpEntry];
-                // set pDpValue to point to the pDpValueStorage[dp->address] entry
-                pDpStruct->pDpValue = &(pDevEntry->pDpValueStorage[address]);
+                T_DpSto *pDpStruct = &pDevEntry->pDevDpVector[pDevEntry->devDpEntry];
+                // set pDpValue to point to the pDevDpValVector[dp->address] entry
+                pDpStruct->pDpValue = &(pDevEntry->pDevDpValVector[address]);
                 printf("%s: pDpStruct = %p, pDpStruct->pDpValue = %p\n", __FUNCTION__, pDpStruct, pDpStruct->pDpValue);
-                // check if the pDpValueStorage[dp->address] entry has possibly been initialized by other 
+                // check if the pDevDpValVector[dp->address] entry has possibly been initialized by other 
                 // datapoints with the same address (defined in device's XIF)
-                if (!pDevEntry->pDpValueStorage[address]) {
+                if (!pDevEntry->pDevDpValVector[address]) {
                     cJSON *pDefaultJSON = GenerateDpDefaultObject(dp);
-                    pDevEntry->pDpValueStorage[address] = pDefaultJSON;
+                    pDevEntry->pDevDpValVector[address] = pDefaultJSON;
 
                     char *jsonStr = cJSON_PrintUnformatted(*pDpStruct->pDpValue);
-                    printf("%s: dp.name=%s, dp.address=%d, devDpEntry=%d, &pDevEntry->pDpValueStorage[dp->address]=%p, dpValue=%s\n",
+                    printf("%s: dp.name=%s, dp.address=%d, devDpEntry=%d, &pDevEntry->pDevDpValVector[dp->address]=%p, dpValue=%s\n",
                                 __FUNCTION__, dp->name, address, pDevEntry->devDpEntry, 
-                                &pDevEntry->pDpValueStorage[address], jsonStr);
+                                &pDevEntry->pDevDpValVector[address], jsonStr);
                     IdlMemFree(jsonStr);
                 }
                 // set idiDpData to point to an entry in per device's DevDpStorage, record the address & increment the datapoint entry
@@ -119,8 +86,8 @@ static int DpSetCustomIdiDpData(IdlDev *dev, IdlDatapoint *dp)
                 pDevEntry->devDpEntry++;
             }
             else {
-                printf("%s: devDpEntry for dp.name=%s exceeded devDpTotalCount(%d) - initialized in DevSetCustomIdiDevData\n", 
-                        __FUNCTION__, dp->name, pDevEntry->devDpTotalCount);
+                printf("%s: devDpEntry for dp.name=%s exceeded devDpCounts(%d) - initialized in DevSetCustomIdiDevData\n", 
+                        __FUNCTION__, dp->name, pDevEntry->devDpCounts);
                 idlError = IErr_Failure;
             }
         }
@@ -135,6 +102,7 @@ static int DpSetCustomIdiDpData(IdlDev *dev, IdlDatapoint *dp)
 
     return idlError;
 }
+
 
 // checkSupportedProgramIds: returns IErr_TypeInvalid if driver doesn't support this device type.
 static int checkSupportedProgramIds(IdlDev *dev)
@@ -157,10 +125,10 @@ static int DevReplaceUnid(IdlDev *dev) {
     int idlError = IErr_Failure;
 
     // point to the allocated storage
-    T_DeviceStoragePtr pLocDevStorageStruc = (T_DeviceStoragePtr)dev->idiDevData;
+    T__DevStoPtr pLocDevStorageStruc = (T__DevStoPtr)dev->idiDevData;
     if (pLocDevStorageStruc) {
-        strncpy(pLocDevStorageStruc->devUniqeId, dev->unid, sizeof(pLocDevStorageStruc->devUniqeId));
-        pLocDevStorageStruc->devUniqeId[MAX_UNID_CHARS] = '\0'; // forced string termination
+        strncpy(pLocDevStorageStruc->devUid, dev->unid, sizeof(pLocDevStorageStruc->devUid));
+        pLocDevStorageStruc->devUid[MAX_UNID_CHARS] = '\0'; // forced string termination
         idlError = IErr_Success;
     }
     return idlError;
@@ -173,7 +141,7 @@ static int DevSetCustomIdiDevData(IdlDev *dev)
 
     int idlError = checkSupportedProgramIds(dev);
     if (idlError == IErr_Success) {
-        if (T_DeviceStorageStruc::deviceEntry < CDDEVLIMIT) {
+        if (gDrvInfo.deviceEntry < CDDEVLIMIT) {
             if (!dev->idiDevData) {
                 // get the device's total datapoint count
                 IdlInterfaceBlock *ifblock = dev->firstIfblock;
@@ -187,42 +155,43 @@ static int DevSetCustomIdiDevData(IdlDev *dev)
                 }
 
                 // allocate per device DevStorage structure
-                T_DeviceStorageStruc *pLocDevStorageStruc = (T_DeviceStorageStruc *)calloc(1, sizeof(T_DeviceStorageStruc));
+                T_DevSto *pLocDevStorageStruc = (T_DevSto *)calloc(1, sizeof(T_DevSto));
                 if (pLocDevStorageStruc) {
                     printf("%s: allocated per device DevStorage structure (%p)for local storage\n", __FUNCTION__, pLocDevStorageStruc);
                     // allocate per device device datapoint structure vector for local storage 
-                    T_DataPointStrucVector pDevDpStorage = (T_DataPointStrucVector)calloc(dpCount, sizeof(T_DataPointStruc));
-                    if (pDevDpStorage) {
-                        printf("%s: allocated per device datapoint structure vector (%p)for local storage\n", __FUNCTION__, pDevDpStorage);
-                        pLocDevStorageStruc->pDevDpStorage = pDevDpStorage;         // point to the allocated storage
+                    T_DpStoVector pDevDpVector = (T_DpStoVector)calloc(dpCount, sizeof(T_DpSto));
+                    if (pDevDpVector) {
+                        printf("%s: allocated per device datapoint structure vector (%p)for local storage\n", __FUNCTION__, pDevDpVector);
+                        pLocDevStorageStruc->pDevDpVector = pDevDpVector;         // point to the allocated storage
 
                         // allocate per device device datapoint value vector for local storage 
-                        T_DataPoint *pDpValueStorage = (T_DataPoint *)calloc(dpCount, sizeof(T_DataPoint));
-                        if (pDpValueStorage) {
-                            printf("%s: allocated per device datapoint value vector (%p)for local storage\n", __FUNCTION__, pDpValueStorage);
-                            pLocDevStorageStruc->devDpTotalCount = dpCount;
-                            pLocDevStorageStruc->pDpValueStorage = pDpValueStorage; // point to the allocated storage
+                        T_DataPoint *pDevDpValVector = (T_DataPoint *)calloc(dpCount, sizeof(T_DataPoint));
+                        if (pDevDpValVector) {
+                            printf("%s: allocated per device datapoint value vector (%p)for local storage\n", __FUNCTION__, pDevDpValVector);
+                            pLocDevStorageStruc->devDpCounts = dpCount;
+                            pLocDevStorageStruc->pDevDpValVector = pDevDpValVector; // point to the allocated storage
 
-                            T_DevStorageNodePtr pNewNode = (T_DevStorageNodePtr)calloc(1, sizeof(T_DeviceStorageNode));
+                            T_DevNodePtr pNewNode = (T_DevNodePtr)calloc(1, sizeof(T_DevNode));
                             if (pNewNode) {
-                                pNewNode->pDevStorageStruct = pLocDevStorageStruc;
+                                pNewNode->pDevSto = pLocDevStorageStruc;
                                 // insert to the end of the list
-                                if (pLocDevStorageHead == NULL) {
+                                if (gDrvInfo.pHeadDevNode == NULL) {
                                     pNewNode->pNext = pNewNode->pPrevious = pNewNode;
-                                    pLocDevStorageHead = pNewNode;
+                                    gDrvInfo.pHeadDevNode = pNewNode;
                                 }
                                 else {
-                                    pNewNode->pNext     = pLocDevStorageHead;
-                                    pNewNode->pPrevious = pLocDevStorageHead->pPrevious;
-                                    pLocDevStorageHead->pPrevious->pNext = pNewNode;
-                                    pLocDevStorageHead->pPrevious = pNewNode;
+                                    pNewNode->pNext     = gDrvInfo.pHeadDevNode;
+                                    pNewNode->pPrevious = gDrvInfo.pHeadDevNode->pPrevious;
+                                    gDrvInfo.pHeadDevNode->pPrevious->pNext = pNewNode;
+                                    gDrvInfo.pHeadDevNode->pPrevious = pNewNode;
                                 }
+                                pNewNode->pDevSto->pDrvInfo = &gDrvInfo;
                             }
                             // set idiDevData to the per device DevStorage Structure & increment device count
                             dev->idiDevData = (void *)pLocDevStorageStruc;          // point to the allocated storage
-                            strncpy(pLocDevStorageStruc->devUniqeId, dev->unid, sizeof(pLocDevStorageStruc->devUniqeId));
-                            pLocDevStorageStruc->devUniqeId[MAX_UNID_CHARS] = '\0'; // forced string termination
-                            T_DeviceStorageStruc::deviceEntry++;
+                            strncpy(pLocDevStorageStruc->devUid, dev->unid, sizeof(pLocDevStorageStruc->devUid));
+                            pLocDevStorageStruc->devUid[MAX_UNID_CHARS] = '\0'; // forced string termination
+                            gDrvInfo.deviceEntry++;
                             idlError = IErr_Success;
                         }
                         else {
@@ -247,7 +216,7 @@ static int DevSetCustomIdiDevData(IdlDev *dev)
         }
     }
     else {
-        printf("%s: device type %s is not supported by this " CDNAME " driver\n", __FUNCTION__, dev->type);
+        printf("%s: device type/program id %s is not supported by this " CDNAME " driver\n", __FUNCTION__, dev->type);
     }
 
     return idlError;
@@ -270,20 +239,20 @@ static int DevRemoveCustomIdiDevData(IdlDev *dev)
             ifblock = ifblock->next;
         }
 
-        // deallocate per device DeviceStorageStruc, dp storage vector, dp value storage vector & update pLocDevStorageHead list
-        T_DevStorageNodePtr pCurNode = pLocDevStorageHead;
+        // deallocate per device DeviceStorageStruc, dp storage vector, dp value storage vector & update gDrvInfo.pHeadDevNode list
+        T_DevNodePtr pCurNode = gDrvInfo.pHeadDevNode;
         while (pCurNode) {
-            if (pCurNode->pDevStorageStruct == (T_DeviceStoragePtr)dev->idiDevData) {
+            if (pCurNode->pDevSto == (T__DevStoPtr)dev->idiDevData) {
                 // we found the device storage node
-                if (pCurNode == pLocDevStorageHead) {
+                if (pCurNode == gDrvInfo.pHeadDevNode) {
                     // we are removing the head node
                     if (pCurNode->pNext == pCurNode->pPrevious) {
                         // we are removing the only node
-                        pLocDevStorageHead = NULL;
+                        gDrvInfo.pHeadDevNode = NULL;
                     }
                     else {
                         // we are moving the head to the next node
-                        pLocDevStorageHead = pCurNode->pNext;
+                        gDrvInfo.pHeadDevNode = pCurNode->pNext;
                         pCurNode->pPrevious->pNext = pCurNode->pNext;
                         pCurNode->pNext->pPrevious = pCurNode->pPrevious;
                     }
@@ -294,24 +263,24 @@ static int DevRemoveCustomIdiDevData(IdlDev *dev)
                 }
 
                 printf("\n%s: deallocate per device datapoint structure vector  (%p)for local storage\n", __FUNCTION__, 
-                            pCurNode->pDevStorageStruct->pDevDpStorage);
-                IdlMemFree( pCurNode->pDevStorageStruct->pDevDpStorage );
+                            pCurNode->pDevSto->pDevDpVector);
+                IdlMemFree( pCurNode->pDevSto->pDevDpVector );
                 printf("\n%s: deallocate per device datapoint value vector (%p)for local storage\n", __FUNCTION__, 
-                            pCurNode->pDevStorageStruct->pDpValueStorage );
-                IdlMemFree( pCurNode->pDevStorageStruct->pDpValueStorage );
+                            pCurNode->pDevSto->pDevDpValVector );
+                IdlMemFree( pCurNode->pDevSto->pDevDpValVector );
                 printf("\n%s: deallocate per device DevStorage structure (%p)for local storage\n", __FUNCTION__, 
                             (dev->idiDevData));
                 IdlMemFree( (dev->idiDevData));
                 IdlMemFree(pCurNode);   // free the device storage node
                 dev->idiDevData = NULL;
-                T_DeviceStorageStruc::deviceEntry--;
+                gDrvInfo.deviceEntry--;
 
                 idlError = IErr_Success;
                 break;  // we are done
             }
             pCurNode = pCurNode->pNext;
-            if (pCurNode == pLocDevStorageHead) {
-                printf("\n%s: Unable to find the entry in pLocDevStorageHead list to clear custom_idiDevData!", __FUNCTION__);
+            if (pCurNode == gDrvInfo.pHeadDevNode) {
+                printf("\n%s: Unable to find the entry in gDrvInfo.pHeadDevNode list to clear custom_idiDevData!", __FUNCTION__);
                 break;  // we have exhausted the search
             }
         }
@@ -343,27 +312,19 @@ int OnDpReadCb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context)
         dp->address
     );
 
-    // since IDL doesn't have a cp_create_cb function to initialize the custom idiDpData ptr, 
-    // we do the checking and initialize the pointer here once for every datapoint.
-    idlError = DpSetCustomIdiDpData(dev, dp);
-    if (idlError == IErr_Success) {
-        if (activeCB.action == IdiaNone) {
-            // Setup read
-            activeCB = (IdiActiveCB){0};
-            activeCB.action = IdiaDpread;
-            activeCB.ReqIndex = request_index;
-            activeCB.dev = dev;
-            activeCB.dp = dp;
-            activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
-            activeCB.context = context;
-        }
-        else {
-            // ideally this should not happen if we implement adaquate queue of activeCBs
-            idlError = IErr_IdiBusy;
-        }
+    if (activeCB.action == IdiaNone) {
+        // Setup read
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaDpread;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.dp = dp;
+        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
+        activeCB.context = context;
     }
     else {
-        IdlDpReadResult(request_index, dev, dp, context, idlError, prio_array, 0);
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
 
     return idlError;
@@ -389,27 +350,19 @@ int OnDpReadExCb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context
         dp->address
     );
 
-    // since IDL doesn't have a cp_create_cb function to initialize the custom idiDpData ptr, 
-    // we do the checking and initialize the pointer here once for every datapoint.
-    idlError = DpSetCustomIdiDpData(dev, dp);
-    if (idlError == IErr_Success) {
-        if (activeCB.action == IdiaNone) {
-                // Setup read
-                activeCB = (IdiActiveCB){0};
-                activeCB.action = IdiaDpread;
-                activeCB.ReqIndex = request_index;
-                activeCB.dev = dev;
-                activeCB.dp = dp;
-                activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
-                activeCB.context = context;
-        }
-        else {
-            // ideally this should not happen if we implement adaquate queue of activeCBs
-            idlError = IErr_IdiBusy;
-        }
+    if (activeCB.action == IdiaNone) {
+            // Setup read
+            activeCB = (IdiActiveCB){0};
+            activeCB.action = IdiaDpread;
+            activeCB.ReqIndex = request_index;
+            activeCB.dev = dev;
+            activeCB.dp = dp;
+            activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
+            activeCB.context = context;
     }
     else {
-        IdlDpReadResult(request_index, dev, dp, context, idlError, prio_array, 0);
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
 
     return idlError;
@@ -436,29 +389,21 @@ int OnDpWriteCb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio, int 
         value
     );
 
-    // since IDL doesn't have a cp_create_cb function to initialize the custom idiDpData ptr, 
-    // we do the checking and initialize the pointer here once for every datapoint.
-    idlError = DpSetCustomIdiDpData(dev, dp);
-    if (idlError == IErr_Success) {
-        if (activeCB.action == IdiaNone) {
-            // Setup write
-            activeCB = (IdiActiveCB){0};
-            activeCB.action = IdiaDpwrite;
-            activeCB.ReqIndex = request_index;
-            activeCB.dev = dev;
-            activeCB.dp = dp;
-            activeCB.prio = prio;
-            activeCB.relinquish = relinquish;
-            activeCB.dValue = value;
-            activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
-        }
-        else {
-            // ideally this should not happen if we implement adaquate queue of activeCBs
-            idlError = IErr_IdiBusy;
-        }
+    if (activeCB.action == IdiaNone) {
+        // Setup write
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaDpwrite;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.dp = dp;
+        activeCB.prio = prio;
+        activeCB.relinquish = relinquish;
+        activeCB.dValue = value;
+        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
     }
     else {
-        IdlDpWriteResult(request_index, dev, dp, idlError);
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
 
     return idlError;
@@ -486,35 +431,27 @@ int OnDpWriteExCb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio,
         value
     );
 
-    // since IDL doesn't have a cp_create_cb function to initialize the custom idiDpData ptr, 
-    // we do the checking and initialize the pointer here once for every datapoint.
-    idlError = DpSetCustomIdiDpData(dev, dp);
-    if (idlError == IErr_Success) {
-        if (activeCB.action == IdiaNone) {
-            // Setup write
-            activeCB = (IdiActiveCB){0};
-            activeCB.action = IdiaDpwrite;
-            activeCB.ReqIndex = request_index;
-            activeCB.dev = dev;
-            activeCB.dp = dp;
-            activeCB.prio = prio;
-            activeCB.relinquish = relinquish;
-            activeCB.rawStringValue = value;
-            activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
-        }
-        else {
-            // ideally this should not happen if we implement adaquate queue of activeCBs
-            idlError = IErr_IdiBusy;
-        }
+    if (activeCB.action == IdiaNone) {
+        // Setup write
+        activeCB = (IdiActiveCB){0};
+        activeCB.action = IdiaDpwrite;
+        activeCB.ReqIndex = request_index;
+        activeCB.dev = dev;
+        activeCB.dp = dp;
+        activeCB.prio = prio;
+        activeCB.relinquish = relinquish;
+        activeCB.rawStringValue = value;
+        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
     }
     else {
-        IdlDpWriteResult(request_index, dev, dp, idlError);
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
 
     return idlError;
 }
 
-#ifdef OLD_API
+#ifdef AP_9580_WORKAROUND
 int OnUnrecColumnCb(int request_index, IdlDatapoint *dp, char *cpUnrecogCols)
 {
     int idlError = IErr_Success;
@@ -561,40 +498,44 @@ int OnDpCreateCb(int  request_index, IdlDev *dev, IdlDatapoint *dp, char *cpUnre
         cpUnrecogCols
     );
 
-    // since IDL doesn't have a cp_create_cb function to initialize the custom idiDpData ptr, 
-    // we do the checking and initialize the pointer here once for every datapoint.
     idlError = DpSetCustomIdiDpData(dev, dp);
-
-    if (!idlError && cpUnrecogCols) {
-        T_DataPointStruc *pDpStruct = (T_DataPointStruc *)dp->idiDpData;
+    if (!idlError) {
+        T_DpSto *pDpStruct = (T_DpSto *)dp->idiDpData;
         if (pDpStruct) {
-            cJSON *dpCustomColums = cJSON_Parse(cpUnrecogCols);
-            if (dpCustomColums && cJSON_IsObject(dpCustomColums)) {
-                cJSON *myTestMultiplier = cJSON_GetObjectItemCaseSensitive(dpCustomColums, "TestMultiplier");
-                if (myTestMultiplier && cJSON_IsString(myTestMultiplier)) {
-                    printf("%s: got TestMultiplier column with value=%s\n", __FUNCTION__, myTestMultiplier->valuestring);
-                    char *pEnd;
-                    pDpStruct->testMultiplier = strtod(myTestMultiplier->valuestring, &pEnd);
-                    if (pDpStruct->testMultiplier == 0) {
-                        // multiplier has to be non zero
-                        pDpStruct->testMultiplier = 1;
+            if (cpUnrecogCols) {
+                cJSON *dpCustomColums = cJSON_Parse(cpUnrecogCols);
+                if (dpCustomColums && cJSON_IsObject(dpCustomColums)) {
+                    cJSON *myTestMultiplier = cJSON_GetObjectItemCaseSensitive(dpCustomColums, "TestMultiplier");
+                    if (myTestMultiplier && cJSON_IsString(myTestMultiplier)) {
+                        printf("%s: got TestMultiplier column with value=%s\n", __FUNCTION__, myTestMultiplier->valuestring);
+                        char *pEnd;
+                        pDpStruct->testMultiplier = strtod(myTestMultiplier->valuestring, &pEnd);
+                        if (pDpStruct->testMultiplier == 0) {
+                            // multiplier has to be non zero to prevent multiplying a value by 0
+                            pDpStruct->testMultiplier = 1;
+                        }
+                        if (*pEnd) {
+                            printf("%s: invalid TestMultiplier value=%s(%lf) in dpCustomColumns for dp.name=%s\n", 
+                                        __FUNCTION__, myTestMultiplier->valuestring, pDpStruct->testMultiplier, dp->name);
+                        }
                     }
-                    if (*pEnd) {
-                        printf("%s: invalid TestMultiplier value=%s(%lf) in dpCustomColumns for dp.name=%s\n", 
-                                    __FUNCTION__, myTestMultiplier->valuestring, pDpStruct->testMultiplier, dp->name);
+                    else {
+                        printf("%s: invalid or unable to find TestMultiplier in dpCustomColums for dp.name=%s\n", __FUNCTION__, dp->name);
+
+                        printf("%s: dpCustomColumns=%s\n", __FUNCTION__, cpUnrecogCols);
                     }
+                    cJSON_free(myTestMultiplier);
                 }
                 else {
-                    printf("%s: invalid or unable to find TestMultiplier in dpCustomColums for dp.name=%s\n", __FUNCTION__, dp->name);
-
-                    printf("%s: dpCustomColumns=%s\n", __FUNCTION__, cpUnrecogCols);
+                    printf("%s: invalid dpCustomColums(%p) %s for dp.name=%s\n", __FUNCTION__, dpCustomColums, cpUnrecogCols, dp->name);
                 }
-                cJSON_free(myTestMultiplier);
+                cJSON_free(dpCustomColums);
             }
             else {
-                printf("%s: invalid dpCustomColums(%p) %s for dp.name=%s\n", __FUNCTION__, dpCustomColums, cpUnrecogCols, dp->name);
+                // We expect at least a custom column TestMultiplier in the XIF, if not initialize testMultipier to a 1
+                pDpStruct->testMultiplier = 1;  // to prevent multiplying a value by 0
+                printf("Error %s: custom column testMultiplier is required for dp.name=%s\n", __FUNCTION__, dp->name);
             }
-            cJSON_free(dpCustomColums);
         }
         else {
             printf("%s: invalid idiDevData for dp.name=%s - initialized in DevSetCustomIdiDevData\n", __FUNCTION__, dp->name);
@@ -927,34 +868,20 @@ static cJSON *GenerateDpDefaultObject(IdlDatapoint *dp)
 }
 
 
-/* GetDpValueForDpLocalStorage: a function taken indirectly from Idl library to return datapoint */
-/* actual value in cJSON object.  The conversion include conversion of enum to cJSON string      */
+// GetDpValueForDpLocalStorage: a function to return datapoint's actual value to be written
+// in cJSON object.
 static cJSON *GetDpValueForDpLocalStorage(IdiActiveCB& aCB) 
 {
     cJSON *actualValue = NULL;
-    // char *strValue = NULL;
     if (aCB.dp) {
-        if (aCB.dp->info.firstReadDone) {
-            if (aCB.dp->info.isTypeAscii) {
-                actualValue = cJSON_CreateString(aCB.rawStringValue);
-                // strValue = cJSON_PrintUnformatted(actualValue);
-                // printf("GetDpValueForDpLocalStorage: new StringValue=%s\n", strValue);
-            } else if (aCB.dp->info.isTypeNative) {
-                actualValue = IdlStringTocJSON(aCB.rawStringValue);
-                // strValue = cJSON_PrintUnformatted(actualValue);
-                // printf("GetDpValueForDpLocalStorage: new NativeValue=%s\n", strValue);
-            } else {
-                actualValue = ConvertDoubleValueToJson(aCB.dp, aCB.dValue);
-                // strValue = cJSON_PrintUnformatted(actualValue);
-                // printf("GetDpValueForDpLocalStorage: new dValue=%s\n", strValue);
-            }
+        if (aCB.dp->info.isTypeAscii) {
+            actualValue = cJSON_CreateString(aCB.rawStringValue);
+        } else if (aCB.dp->info.isTypeNative) {
+            actualValue = IdlStringTocJSON(aCB.rawStringValue);
         } else {
-            actualValue = GenerateDpDefaultObject(aCB.dp);
-            // strValue = cJSON_PrintUnformatted(actualValue);
-            // printf("GetDpValueForDpLocalStorage: GenerateDpDefaultObject=%s\n", strValue);
+            actualValue = ConvertDoubleValueToJson(aCB.dp, aCB.dValue);
         }
     }
-    // IdlMemFree(strValue);
     return actualValue;
 }
 
@@ -983,8 +910,8 @@ static int DpValueRangeCheck(IdlDatapoint *dp, double value, int *exceptionType)
 }
 
 
-/* JsonDpValueToDouble: a function taken directly from Idl library to convert datapoint */
-/* Json value to a double.  The conversion include conversion of enum string to double */
+// JsonDpValueToDouble: a function to convert datapoint Json value to a double.  
+// The conversion include conversion of enum string to double */
 static int JsonDpValueToDouble(cJSON *value, IdlDatapoint *dp, double *dValue)
 {
     int i = 0;
@@ -1018,8 +945,8 @@ static int JsonDpValueToDouble(cJSON *value, IdlDatapoint *dp, double *dValue)
     return idlError;
 }
 
-/* SetDpValueFromDpLocalStorage: a function to set datapoint actual value (actualStringValue, */
-/* actualNativeValue, or ) */
+// SetDpValueFromDpLocalStorage: a function to set datapoint actual value (actualStringValue,
+// actualNativeValue, or double)
 static int SetDpValueFromDpLocalStorage(IdiActiveCB& aCB, T_DataPoint pcJsonDpVal, double *dValue)
 {
     int idlError = IErr_Success;
@@ -1049,32 +976,6 @@ static int SetDpValueFromDpLocalStorage(IdiActiveCB& aCB, T_DataPoint pcJsonDpVa
         aCB.dp->info.rawStringValue = strdup(strValue);
         // printf("SetDpValueFromDpLocalStorage: setting actualStringValue=%s\n", aCB.dp->info.actualStringValue);
     } else if (aCB.dp->info.isTypeNative) {
-#ifdef NOTUSED
-        char *pTemp = aCB.dp->info.actualNativeValue;
-        if (aCB.dp->info.actualNativeValue) {
-            // free the current actualNativeValue
-            printf("%s: isTypeNative deallocate aCB.dp->info.actualNativeValue (%p)\n", __FUNCTION__, (void *)aCB.dp->info.actualNativeValue);
-            IdlMemFree(aCB.dp->info.actualNativeValue);
-        }
-        // let actualNativeValue be freed by Idl library routine
-        char *strValue = cJSON_PrintUnformatted(pcJsonDpVal);
-        aCB.dp->info.actualNativeValue = strValue;
-        printf("%s: isTypeNative new aCB.dp->info.actualNativeValue (%p) = %s\n", 
-                __FUNCTION__, (void *)aCB.dp->info.actualNativeValue, aCB.dp->info.actualNativeValue);
-        if (aCB.dp->info.rawStringValue && aCB.dp->info.rawStringValue != pTemp) {
-            // free the current rawStringValue
-            printf("%s: isTypeNative deallocate aCB.dp->info.rawStringValue (%p)\n", __FUNCTION__, (void *)aCB.dp->info.rawStringValue);
-            IdlMemFree(aCB.dp->info.rawStringValue);
-        }
-        else {
-            // prevent double free or corruption (fasttop)
-            if (aCB.dp->info.rawStringValue)
-                printf("%s: WHY old aCB.dp->info.actualNativeValue(%p) == aCB.dp->info.rawStringValue (%p)\n",
-                    __FUNCTION__, (void *)pTemp, (void *)aCB.dp->info.rawStringValue);
-        }
-        // let rawStringValue be freed by Idl library routine
-        aCB.dp->info.rawStringValue = strdup(strValue);
-#else
         if (aCB.dp->info.rawStringValue) {
             // free the current rawStringValue
             printf("%s: isTypeNative deallocate aCB.dp->info.rawStringValue (%p)\n", __FUNCTION__, (void *)aCB.dp->info.rawStringValue);
@@ -1083,13 +984,12 @@ static int SetDpValueFromDpLocalStorage(IdiActiveCB& aCB, T_DataPoint pcJsonDpVa
         // let rawStringValue be freed by Idl library routine
         char *strValue = cJSON_PrintUnformatted(pcJsonDpVal);
         aCB.dp->info.rawStringValue = strValue;
-#endif
         printf("%s: isTypeNative new aCB.dp->info.rawStringValue (%p) = %s\n", 
                 __FUNCTION__, (void *)aCB.dp->info.rawStringValue, aCB.dp->info.rawStringValue);
     } else {
         idlError = JsonDpValueToDouble(pcJsonDpVal, aCB.dp, dValue);
-        aCB.dp->info.actualValue = *dValue;
-        // printf("SetDpValueFromDpLocalStorage: setting actualValue=%lf\n", aCB.dp->info.actualValue);
+        // aCB.dp->info.actualValue = *dValue;
+        printf("%s: isTypeDouble setting dValue=%lf\n", __FUNCTION__, *dValue);
     }
 
     return idlError;
@@ -1206,7 +1106,7 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
              *  Do our write
              */
             if (IsSimulateProcessingDone()) {
-                T_DataPointStruc *pDpStruc = (T_DataPointStruc *)(aCB.dp->idiDpData);
+                T_DpSto *pDpStruc = (T_DpSto *)(aCB.dp->idiDpData);
                 if (pDpStruc) {
                     if (*pDpStruc->pDpValue) {
                         // free existing Cjson object from the dp entry in per device's DevDpValue vector
@@ -1217,6 +1117,12 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
                     *pDpStruc->pDpValue = GetDpValueForDpLocalStorage(aCB);
                     char *outStr = cJSON_PrintUnformatted(*pDpStruc->pDpValue);
                     printf(" Value written: %s at pDpStruc(%p)->pDpValue = %p\n", outStr, pDpStruc, pDpStruc->pDpValue);
+
+#ifdef INCLUDE_ETI
+                    uint reg = pDpStruc->address;
+                    T__DevStoPtr pDevEntry = (T__DevStoPtr)(aCB.dev->idiDevData);
+                    idlError = DevWritePublish(pDevEntry, reg, *pDpStruc->pDpValue);
+#endif
                     IdlMemFree(outStr);
                 }
                 else {
@@ -1236,17 +1142,23 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
              *  Do our read
              */
             if (IsSimulateProcessingDone()) {
-                T_DataPointStruc *pDpStruc = (T_DataPointStruc *)(aCB.dp->idiDpData);
+                T_DpSto *pDpStruc = (T_DpSto *)(aCB.dp->idiDpData);
                 double dpValue = 0;
                 if (pDpStruc) {
+#ifdef INCLUDE_ETI
+                    uint reg = pDpStruc->address;
+                    T__DevStoPtr pDevEntry = (T__DevStoPtr)(aCB.dev->idiDevData);
+                    DevReadPublish(pDevEntry, reg);
+#endif
                     if (*pDpStruc->pDpValue) {
                         char *jsonStr = cJSON_PrintUnformatted(*pDpStruc->pDpValue);
                         idlError = SetDpValueFromDpLocalStorage(aCB, *pDpStruc->pDpValue, &dpValue);
-                        dpValue *= pDpStruc->testMultiplier;
+                        if (pDpStruc->testMultiplier != 0)
+                            dpValue *= pDpStruc->testMultiplier;
                         if (idlError == IErr_Success) {
-                            printf("%s Value read: %s at pDpStruc(%p)->pDpValue = %p\n", 
+                            printf("%s Value read: %s (before applying multiplier: %lf) at pDpStruc(%p)->pDpValue = %p\n", 
                                     (aCB.lastError == IErr_IdiBusy) ? ".done\n" : "", 
-                                    jsonStr, pDpStruc, pDpStruc->pDpValue);
+                                    jsonStr, pDpStruc->testMultiplier, pDpStruc, pDpStruc->pDpValue);
                          }
                         else {
                             printf(" Read error: Unable to read dp entry in localDpValuesVector\n");

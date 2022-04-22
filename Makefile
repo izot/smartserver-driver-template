@@ -3,7 +3,7 @@
 ##################################################################
 
 # CDNAME:         driver/protocol name
-CDNAME=example
+CDNAME=test
 # CDDESC:         driver's description
 CDDESC="$(CDNAME) driver for SmartServer IoT"
 # CDDEVLIMIT:     driver's supported maximum device limit (10 for this example)
@@ -24,7 +24,9 @@ CDMANUFACTURER="Dialog Semiconductor, A Renesas Company"
 # CDLICENSE:      driver license string/info
 CDLICENSE="Dialog $(CDNAME) Custom Driver License"
 # CDSOURCES:      driver's list of source files to compile & build
-CDSOURCES=src/example.cpp
+CDSOURCES=src/example.cpp src/eti.cpp
+# CDINCETI:	      include ETI example
+CDINCETI=-DINCLUDE_ETI
 # CDCFLAGS:       list of C/C++ compilation flags such as -0g -ggdb (for debug build)
 CDCFLAGS=-Og -ggdb
 # CDLIBS:         list of extra/thirdparty libraries used by the linker
@@ -47,7 +49,7 @@ CROSS_COMPILER=arm-linux-gnueabihf-
 INCLUDES = -I$(IDI_PATH)/src
 INCLUDES += -I$(IDI_PATH)/src/idl/include
 INCLUDES += -L$(IDI_PATH)/src/idl/lib
-CFLAGS += -g $(CDCFLAGS) -Wall $(INCLUDES) -DCDNAME=\"$(CDNAME)\" -DCDDEVLIMIT=$(CDDEVLIMIT) -DCDPROGRAMIDS="$(CDPROGRAMIDS)"
+CFLAGS += -g $(CDCFLAGS) -Wall $(INCLUDES) -DCDNAME=\"$(CDNAME)\" -DCDDEVLIMIT=$(CDDEVLIMIT) -DCDPROGRAMIDS="$(CDPROGRAMIDS)" $(CDINCETI)
 LIBS=-lidl -lmosquitto -lpthread -lrt $(CDLIBS)
 
 CSRC = src/main.cpp $(CDSOURCES)

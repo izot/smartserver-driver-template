@@ -1,7 +1,7 @@
 #ifndef EXAMPLE_H
 #define EXAMPLE_H
 
-#include <stdlib.h>
+#include "common.h"
 
 #define IdiFree(x) {if (x) { free(x); x = NULL;}}
 #define IDI_ACTION_NORMAL_TIMEOUT   30
@@ -50,8 +50,12 @@ extern int OnDevProvisionCb(int request_index, IdlDev *dev, char *args);
 extern int OnDevDeprovisionCb(int request_index, IdlDev *dev);
 extern int OnDevReplaceCb(int request_index, IdlDev *dev, char *args);
 extern int OnDevDeleteCb(int request_index, IdlDev *dev);
-#ifdef OLD_API
+#ifdef AP_9580_WORKAROUND
 extern int OnUnrecColumnCb(int request_index, IdlDatapoint *dp, char *cpUnrecogCols);
+#endif
+
+#ifdef INCLUDE_ETI
+#include "eti.h"
 #endif
 
 #endif

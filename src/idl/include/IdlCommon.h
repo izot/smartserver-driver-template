@@ -117,6 +117,7 @@
 #define MODBUS_PROTOCOL_ID      "modbus"
 #define DEFAULT_PROTOCOL_ID     "custom"
 #define PROTO_ID_STR            "Protocol identifier"
+#define SUB_WAIT_SEC            "Subscription wait sec"
 #define MQTT_DETAILS_STR        "MQTT specific details"
 #define CLIENTID_STR            "MQTT client ID"
 #define CLEAN_SESSION_STR       "cleanSession"
