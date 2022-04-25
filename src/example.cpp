@@ -8,17 +8,14 @@
 #ifndef CDDEVLIMIT
 #error CDDEVLIMIT must be defined in Makefile
 #endif
-#ifndef CDPROGRAMIDS
-#error CDPROGRAMIDS must be defined in Makefile
-#endif
 
 
 extern Idl *idl;
 
-// For this example there is only one activeCB.  In real-life driver this
+// For this example there is only one gActiveCB.  In real-life driver this
 // should be a linked list of activeCBs and the IdiProcAsynchThreadFunction
 // will cycle through the list of activeCBs until no more available.
-static IdiActiveCB activeCB;
+static IdiActiveCB gActiveCB;
 
 static T_DrvInfo gDrvInfo = {};
 
@@ -51,6 +48,25 @@ int IdiStart()
 #endif
 
     return 0;
+}
+
+
+static const char *IErrToStr(int errCode) {
+    const char *cpErr;
+    switch (errCode) {
+        case IErr_Success: cpErr     = "IErr_Success"; break;
+        case IErr_Failure: cpErr     = "IErr_Failure"; break;
+        case IErr_IdiBusy: cpErr     = "IErr_IdiBusy"; break;
+        case IErr_TypeInvalid: cpErr = "IErr_TypeInvalid"; break;
+        case IErr_UnidInvalid: cpErr = "IErr_UnidInvalid"; break;
+        case IErr_UnidExists: cpErr  = "IErr_UnidExists"; break;
+        case IErr_DevCommFail: cpErr = "IErr_DevCommFail"; break;
+        case IErr_Nack: cpErr        = "IErr_Nack"; break;
+        case IErr_Max: cpErr         = "IErr_Max"; break;
+        default: cpErr = "IErr_Unknown"; break;
+    }
+
+    return cpErr;
 }
 
 static int DpSetCustomIdiDpData(IdlDev *dev, IdlDatapoint *dp)
@@ -104,31 +120,16 @@ static int DpSetCustomIdiDpData(IdlDev *dev, IdlDatapoint *dp)
 }
 
 
-// checkSupportedProgramIds: returns IErr_TypeInvalid if driver doesn't support this device type.
-static int checkSupportedProgramIds(IdlDev *dev)
-{
-    static const char *pSupportedProgramIDs[] = CDPROGRAMIDS;
-
-    int idlError = IErr_TypeInvalid;
-    for (auto *pid : pSupportedProgramIDs) {
-        if (strcasecmp(dev->type, pid) == 0) {
-            idlError = IErr_Success;
-            break;
-        }
-    }
-
-    return idlError;
-}
-
-
 static int DevReplaceUnid(IdlDev *dev) {
     int idlError = IErr_Failure;
 
     // point to the allocated storage
     T__DevStoPtr pLocDevStorageStruc = (T__DevStoPtr)dev->idiDevData;
     if (pLocDevStorageStruc) {
-        strncpy(pLocDevStorageStruc->devUid, dev->unid, sizeof(pLocDevStorageStruc->devUid));
-        pLocDevStorageStruc->devUid[MAX_UNID_CHARS] = '\0'; // forced string termination
+        if (dev->unid) {
+            strncpy(pLocDevStorageStruc->devUid, dev->unid, sizeof(pLocDevStorageStruc->devUid));
+            pLocDevStorageStruc->devUid[MAX_UNID_CHARS] = '\0'; // forced string termination
+        }
         idlError = IErr_Success;
     }
     return idlError;
@@ -139,84 +140,81 @@ static int DevSetCustomIdiDevData(IdlDev *dev)
 {
     uint dpCount = 0;
 
-    int idlError = checkSupportedProgramIds(dev);
-    if (idlError == IErr_Success) {
-        if (gDrvInfo.deviceEntry < CDDEVLIMIT) {
-            if (!dev->idiDevData) {
-                // get the device's total datapoint count
-                IdlInterfaceBlock *ifblock = dev->firstIfblock;
-                while (ifblock) {
-                    IdlIapDatapoint *iapdp = ifblock->firstIapdp;
-                    while (iapdp) {
-                        dpCount += iapdp->dpCnt;
-                        iapdp = iapdp->next;
-                    }
-                    ifblock = ifblock->next;
+    int idlError = IErr_Success;
+    if (gDrvInfo.deviceEntry < CDDEVLIMIT) {
+        if (!dev->idiDevData) {
+            // get the device's total datapoint count
+            IdlInterfaceBlock *ifblock = dev->firstIfblock;
+            while (ifblock) {
+                IdlIapDatapoint *iapdp = ifblock->firstIapdp;
+                while (iapdp) {
+                    dpCount += iapdp->dpCnt;
+                    iapdp = iapdp->next;
                 }
+                ifblock = ifblock->next;
+            }
 
-                // allocate per device DevStorage structure
-                T_DevSto *pLocDevStorageStruc = (T_DevSto *)calloc(1, sizeof(T_DevSto));
-                if (pLocDevStorageStruc) {
-                    printf("%s: allocated per device DevStorage structure (%p)for local storage\n", __FUNCTION__, pLocDevStorageStruc);
-                    // allocate per device device datapoint structure vector for local storage 
-                    T_DpStoVector pDevDpVector = (T_DpStoVector)calloc(dpCount, sizeof(T_DpSto));
-                    if (pDevDpVector) {
-                        printf("%s: allocated per device datapoint structure vector (%p)for local storage\n", __FUNCTION__, pDevDpVector);
-                        pLocDevStorageStruc->pDevDpVector = pDevDpVector;         // point to the allocated storage
+            // allocate per device DevStorage structure
+            T_DevSto *pLocDevStorageStruc = (T_DevSto *)calloc(1, sizeof(T_DevSto));
+            if (pLocDevStorageStruc) {
+                printf("%s: allocated per device DevStorage structure (%p)for local storage\n", __FUNCTION__, pLocDevStorageStruc);
+                // allocate per device device datapoint structure vector for local storage 
+                T_DpStoVector pDevDpVector = (T_DpStoVector)calloc(dpCount, sizeof(T_DpSto));
+                if (pDevDpVector) {
+                    printf("%s: allocated per device datapoint structure vector (%p)for local storage\n", __FUNCTION__, pDevDpVector);
+                    pLocDevStorageStruc->pDevDpVector = pDevDpVector;         // point to the allocated storage
 
-                        // allocate per device device datapoint value vector for local storage 
-                        T_DataPoint *pDevDpValVector = (T_DataPoint *)calloc(dpCount, sizeof(T_DataPoint));
-                        if (pDevDpValVector) {
-                            printf("%s: allocated per device datapoint value vector (%p)for local storage\n", __FUNCTION__, pDevDpValVector);
-                            pLocDevStorageStruc->devDpCounts = dpCount;
-                            pLocDevStorageStruc->pDevDpValVector = pDevDpValVector; // point to the allocated storage
+                    // allocate per device device datapoint value vector for local storage 
+                    T_DataPoint *pDevDpValVector = (T_DataPoint *)calloc(dpCount, sizeof(T_DataPoint));
+                    if (pDevDpValVector) {
+                        printf("%s: allocated per device datapoint value vector (%p)for local storage\n", __FUNCTION__, pDevDpValVector);
+                        pLocDevStorageStruc->devDpCounts = dpCount;
+                        pLocDevStorageStruc->pDevDpValVector = pDevDpValVector; // point to the allocated storage
 
-                            T_DevNodePtr pNewNode = (T_DevNodePtr)calloc(1, sizeof(T_DevNode));
-                            if (pNewNode) {
-                                pNewNode->pDevSto = pLocDevStorageStruc;
-                                // insert to the end of the list
-                                if (gDrvInfo.pHeadDevNode == NULL) {
-                                    pNewNode->pNext = pNewNode->pPrevious = pNewNode;
-                                    gDrvInfo.pHeadDevNode = pNewNode;
-                                }
-                                else {
-                                    pNewNode->pNext     = gDrvInfo.pHeadDevNode;
-                                    pNewNode->pPrevious = gDrvInfo.pHeadDevNode->pPrevious;
-                                    gDrvInfo.pHeadDevNode->pPrevious->pNext = pNewNode;
-                                    gDrvInfo.pHeadDevNode->pPrevious = pNewNode;
-                                }
-                                pNewNode->pDevSto->pDrvInfo = &gDrvInfo;
+                        T_DevNodePtr pNewNode = (T_DevNodePtr)calloc(1, sizeof(T_DevNode));
+                        if (pNewNode) {
+                            pNewNode->pDevSto = pLocDevStorageStruc;
+                            // insert to the end of the list
+                            if (gDrvInfo.pHeadDevNode == NULL) {
+                                pNewNode->pNext = pNewNode->pPrevious = pNewNode;
+                                gDrvInfo.pHeadDevNode = pNewNode;
                             }
-                            // set idiDevData to the per device DevStorage Structure & increment device count
-                            dev->idiDevData = (void *)pLocDevStorageStruc;          // point to the allocated storage
+                            else {
+                                pNewNode->pNext     = gDrvInfo.pHeadDevNode;
+                                pNewNode->pPrevious = gDrvInfo.pHeadDevNode->pPrevious;
+                                gDrvInfo.pHeadDevNode->pPrevious->pNext = pNewNode;
+                                gDrvInfo.pHeadDevNode->pPrevious = pNewNode;
+                            }
+                            pNewNode->pDevSto->pDrvInfo = &gDrvInfo;
+                        }
+                        // set idiDevData to the per device DevStorage Structure & increment device count
+                        dev->idiDevData = (void *)pLocDevStorageStruc;          // point to the allocated storage
+                        if (dev->unid) {
                             strncpy(pLocDevStorageStruc->devUid, dev->unid, sizeof(pLocDevStorageStruc->devUid));
                             pLocDevStorageStruc->devUid[MAX_UNID_CHARS] = '\0'; // forced string termination
-                            gDrvInfo.deviceEntry++;
-                            idlError = IErr_Success;
                         }
-                        else {
-                            printf("%s: failed to allocate per device datapoint value vector for local storage\n", __FUNCTION__);
-                        }
+                        gDrvInfo.deviceEntry++;
+                        idlError = IErr_Success;
                     }
                     else {
-                        printf("%s: failed to allocate per device datapoint structure vector for local storage\n", __FUNCTION__);
+                        printf("%s: failed to allocate per device datapoint value vector for local storage\n", __FUNCTION__);
                     }
                 }
                 else {
-                        printf("%s: failed to allocate per device DevStorage structure for local storage\n", __FUNCTION__);
+                    printf("%s: failed to allocate per device datapoint structure vector for local storage\n", __FUNCTION__);
                 }
             }
             else {
-                printf("%s: Can't set custom_idiDevData, it has already been set!", __FUNCTION__);
+                    printf("%s: failed to allocate per device DevStorage structure for local storage\n", __FUNCTION__);
             }
         }
         else {
-            printf("%s: device count exceeded precompiled max number (%d) defined in device idl configuration\n", 
-                        __FUNCTION__, CDDEVLIMIT);
+            printf("%s: Can't set custom_idiDevData, it has already been set!", __FUNCTION__);
         }
     }
     else {
-        printf("%s: device type/program id %s is not supported by this " CDNAME " driver\n", __FUNCTION__, dev->type);
+        printf("%s: device count exceeded precompiled max number (%d) defined in device idl configuration\n", 
+                    __FUNCTION__, CDDEVLIMIT);
     }
 
     return idlError;
@@ -228,38 +226,42 @@ static int DevRemoveCustomIdiDevData(IdlDev *dev)
     int idlError = IErr_Failure;
 
     if (dev->idiDevData) {
-        // clear the per datapoint idiDpData
-        IdlInterfaceBlock *ifblock = dev->firstIfblock;
-        while (ifblock) {
-            IdlIapDatapoint *iapdp = ifblock->firstIapdp;
-            while (iapdp) {
-                iapdp->firstField->dp->idiDpData = NULL;
-                iapdp = iapdp->next;
-            }
-            ifblock = ifblock->next;
-        }
-
-        // deallocate per device DeviceStorageStruc, dp storage vector, dp value storage vector & update gDrvInfo.pHeadDevNode list
+        // deallocate per device DeviceStorageStruc, dp storage vector, dp value storage vector & 
+        // update gDrvInfo.pHeadDevNode list
+        // we assume this routine is called within the fsm in threadsafe manner
         T_DevNodePtr pCurNode = gDrvInfo.pHeadDevNode;
+        printf("\n%s: pCurNode = pHeadDevNode (%p)for local storage\n", __FUNCTION__, pCurNode);
         while (pCurNode) {
+            printf("\n%s: processing pCurNode(%p) with name=%s\n", __FUNCTION__, pCurNode, pCurNode->pDevSto->devUid);
             if (pCurNode->pDevSto == (T__DevStoPtr)dev->idiDevData) {
                 // we found the device storage node
+                printf("\n%s: Dev->name:%s pCurNode(%p) pCurNode->pDevSto(%p) == dev->idiDevData\n", __FUNCTION__, 
+                                dev->info.name, pCurNode, pCurNode->pDevSto);
                 if (pCurNode == gDrvInfo.pHeadDevNode) {
                     // we are removing the head node
+                    printf("\n%s: pCurNode == pHeadDevNode(%p) => removing from head\n", __FUNCTION__, gDrvInfo.pHeadDevNode);
                     if (pCurNode->pNext == pCurNode->pPrevious) {
                         // we are removing the only node
                         gDrvInfo.pHeadDevNode = NULL;
+                        printf("\n%s: pCurNode->pNext == pCurNode->pPrevious(%p) => removing  only node\n", __FUNCTION__, pCurNode->pPrevious);
                     }
                     else {
                         // we are moving the head to the next node
                         gDrvInfo.pHeadDevNode = pCurNode->pNext;
+                        printf("\n%s: => moving  head to next node; gDrvInfo.pHeadDevNode = pCurNode->pNext(%p)\n", __FUNCTION__, pCurNode->pNext);
                         pCurNode->pPrevious->pNext = pCurNode->pNext;
+                        printf("\n%s: pCurNode->pPrevious->pNext = pCurNode->pNext;(%p)\n", __FUNCTION__, pCurNode->pNext);
                         pCurNode->pNext->pPrevious = pCurNode->pPrevious;
+                        printf("\n%s: pCurNode->pNext->pPrevious = pCurNode->pPrevious;(%p)\n", __FUNCTION__, pCurNode->pPrevious);
                     }
                 }
                 else {
+                    printf("\n%s: Dev->name:%s pCurNode(%p) pCurNode != pHeadDevNode(%p) => removing from somewhere in list\n", __FUNCTION__, 
+                                    dev->info.name, pCurNode, gDrvInfo.pHeadDevNode);
                     pCurNode->pPrevious->pNext = pCurNode->pNext;
+                    printf("\n%s: pCurNode->pPrevious->pNext = pCurNode->pNext;(%p)\n", __FUNCTION__, pCurNode->pNext);
                     pCurNode->pNext->pPrevious = pCurNode->pPrevious;
+                    printf("\n%s: pCurNode->pNext->pPrevious = pCurNode->pPrevious;(%p)\n", __FUNCTION__, pCurNode->pPrevious);
                 }
 
                 printf("\n%s: deallocate per device datapoint structure vector  (%p)for local storage\n", __FUNCTION__, 
@@ -271,6 +273,7 @@ static int DevRemoveCustomIdiDevData(IdlDev *dev)
                 printf("\n%s: deallocate per device DevStorage structure (%p)for local storage\n", __FUNCTION__, 
                             (dev->idiDevData));
                 IdlMemFree( (dev->idiDevData));
+                printf("\n%s: Freeing pCurNode(%p)\n", __FUNCTION__, pCurNode);
                 IdlMemFree(pCurNode);   // free the device storage node
                 dev->idiDevData = NULL;
                 gDrvInfo.deviceEntry--;
@@ -279,17 +282,36 @@ static int DevRemoveCustomIdiDevData(IdlDev *dev)
                 break;  // we are done
             }
             pCurNode = pCurNode->pNext;
+            printf("\n%s: pCurNode = pCurNode->pNext;(%p)\n", __FUNCTION__, pCurNode);
             if (pCurNode == gDrvInfo.pHeadDevNode) {
-                printf("\n%s: Unable to find the entry in gDrvInfo.pHeadDevNode list to clear custom_idiDevData!", __FUNCTION__);
+                printf("\n%s: Done - Unable to find the entry in gDrvInfo.pHeadDevNode list to clear custom_idiDevData!", __FUNCTION__);
                 break;  // we have exhausted the search
             }
         }
+        printf("\n%s: done. idlError=%d\n", __FUNCTION__, idlError);
     }
     else {
         printf("\n%s: Can't clear custom_idiDevData, it has not been set!", __FUNCTION__);
     }
 
     return idlError;
+}
+
+
+// GetFreeActiveCB: We only have one gActiveCB, so we wait for a maximum of 5 ms to get a free 
+// ActiveCB.  If an ActiveCB is available, we return a pointer to an gActiveCB otherwise a null
+IdiActiveCB *GetFreeActiveCB() {
+    int waitMs = 5;
+    IdiActiveCB *pACB = NULL;
+    while (gActiveCB.action != IdiaNone) {
+        usleep(1000);   // 1ms sleep
+        if (--waitMs == 0)
+            break;
+    }
+    if (waitMs > 0)
+        pACB = &gActiveCB;
+
+    return pACB;
 }
 
 
@@ -312,20 +334,22 @@ int OnDpReadCb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context)
         dp->address
     );
 
-    if (activeCB.action == IdiaNone) {
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
         // Setup read
-        activeCB = (IdiActiveCB){0};
-        activeCB.action = IdiaDpread;
-        activeCB.ReqIndex = request_index;
-        activeCB.dev = dev;
-        activeCB.dp = dp;
-        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
-        activeCB.context = context;
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaDpread;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->dp = dp;
+        pACB->timeout = IDI_ACTION_NORMAL_TIMEOUT;
+        pACB->context = context;
     }
     else {
         // ideally this should not happen if we implement adaquate queue of activeCBs
         idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -350,20 +374,22 @@ int OnDpReadExCb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context
         dp->address
     );
 
-    if (activeCB.action == IdiaNone) {
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
             // Setup read
-            activeCB = (IdiActiveCB){0};
-            activeCB.action = IdiaDpread;
-            activeCB.ReqIndex = request_index;
-            activeCB.dev = dev;
-            activeCB.dp = dp;
-            activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
-            activeCB.context = context;
+            *pACB = (IdiActiveCB){0};
+            pACB->action = IdiaDpread;
+            pACB->ReqIndex = request_index;
+            pACB->dev = dev;
+            pACB->dp = dp;
+            pACB->timeout = IDI_ACTION_NORMAL_TIMEOUT;
+            pACB->context = context;
     }
     else {
         // ideally this should not happen if we implement adaquate queue of activeCBs
         idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -389,22 +415,24 @@ int OnDpWriteCb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio, int 
         value
     );
 
-    if (activeCB.action == IdiaNone) {
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
         // Setup write
-        activeCB = (IdiActiveCB){0};
-        activeCB.action = IdiaDpwrite;
-        activeCB.ReqIndex = request_index;
-        activeCB.dev = dev;
-        activeCB.dp = dp;
-        activeCB.prio = prio;
-        activeCB.relinquish = relinquish;
-        activeCB.dValue = value;
-        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaDpwrite;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->dp = dp;
+        pACB->prio = prio;
+        pACB->relinquish = relinquish;
+        pACB->dValue = value;
+        pACB->timeout = IDI_ACTION_NORMAL_TIMEOUT;
     }
     else {
         // ideally this should not happen if we implement adaquate queue of activeCBs
         idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -431,22 +459,24 @@ int OnDpWriteExCb(int request_index, IdlDev *dev, IdlDatapoint *dp, int prio,
         value
     );
 
-    if (activeCB.action == IdiaNone) {
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
         // Setup write
-        activeCB = (IdiActiveCB){0};
-        activeCB.action = IdiaDpwrite;
-        activeCB.ReqIndex = request_index;
-        activeCB.dev = dev;
-        activeCB.dp = dp;
-        activeCB.prio = prio;
-        activeCB.relinquish = relinquish;
-        activeCB.rawStringValue = value;
-        activeCB.timeout = IDI_ACTION_NORMAL_TIMEOUT;
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaDpwrite;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->dp = dp;
+        pACB->prio = prio;
+        pACB->relinquish = relinquish;
+        pACB->rawStringValue = value;
+        pACB->timeout = IDI_ACTION_NORMAL_TIMEOUT;
     }
     else {
         // ideally this should not happen if we implement adaquate queue of activeCBs
         idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -500,6 +530,7 @@ int OnDpCreateCb(int  request_index, IdlDev *dev, IdlDatapoint *dp, char *cpUnre
 
     idlError = DpSetCustomIdiDpData(dev, dp);
     if (!idlError) {
+        idlError = IErr_Failure;
         T_DpSto *pDpStruct = (T_DpSto *)dp->idiDpData;
         if (pDpStruct) {
             if (cpUnrecogCols) {
@@ -518,6 +549,7 @@ int OnDpCreateCb(int  request_index, IdlDev *dev, IdlDatapoint *dp, char *cpUnre
                             printf("%s: invalid TestMultiplier value=%s(%lf) in dpCustomColumns for dp.name=%s\n", 
                                         __FUNCTION__, myTestMultiplier->valuestring, pDpStruct->testMultiplier, dp->name);
                         }
+                        idlError = IErr_Success;
                     }
                     else {
                         printf("%s: invalid or unable to find TestMultiplier in dpCustomColums for dp.name=%s\n", __FUNCTION__, dp->name);
@@ -541,6 +573,7 @@ int OnDpCreateCb(int  request_index, IdlDev *dev, IdlDatapoint *dp, char *cpUnre
             printf("%s: invalid idiDevData for dp.name=%s - initialized in DevSetCustomIdiDevData\n", __FUNCTION__, dp->name);
         }
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
     
     return idlError;
 }
@@ -573,27 +606,21 @@ int OnDevCreateCb(int request_index, IdlDev *dev, char *args, char *xif_dp_array
 		(args) ? args : "NULL"
     );
 	  
-    idlError = DevSetCustomIdiDevData(dev);
-    if (idlError == IErr_Success) {
-        if (activeCB.action == IdiaNone) {
-            if (idlError == IErr_Success) {
-                // Setup provision
-                activeCB = (IdiActiveCB){0};
-                activeCB.action = IdiaCreate;
-                activeCB.ReqIndex = request_index;
-                activeCB.dev = dev;
-                activeCB.args = args;
-                activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
-            }
-        }
-        else {
-            // ideally this should not happen if we implement adaquate queue of activeCBs
-            idlError = IErr_IdiBusy;
-        }
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
+        // Setup create action
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaCreate;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->args = args;
+        pACB->timeout = IDI_ACTION_LONG_TIMEOUT;
     }
     else {
-        IdlDevCreateResult(request_index, dev, idlError);
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -625,19 +652,21 @@ int OnDevProvisionCb(int request_index, IdlDev *dev, char *args)
 		(args) ? args : "NULL"
     );
 
-    if (activeCB.action == IdiaNone) {
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
         // Setup provision
-        activeCB = (IdiActiveCB){0};
-        activeCB.action = IdiaProvision;
-        activeCB.ReqIndex = request_index;
-        activeCB.dev = dev;
-        activeCB.args = args;
-        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaProvision;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->args = args;
+        pACB->timeout = IDI_ACTION_LONG_TIMEOUT;
     }
     else {
         // ideally this should not happen if we implement adaquate queue of activeCBs
         idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -648,7 +677,6 @@ int OnDevProvisionCb(int request_index, IdlDev *dev, char *args)
 int OnDevDeprovisionCb(int request_index, IdlDev *dev)
 {
     int idlError = IErr_Success;
-//    printf("%s: UNID: %s\n", __FUNCTION__, (dev && dev->unid) ? dev->unid : "NULL");
 
     printf("\n%s:\n", __FUNCTION__);			// Print out the called function to the console
 	
@@ -668,22 +696,24 @@ int OnDevDeprovisionCb(int request_index, IdlDev *dev)
         dev->type
     );
 
-    if (activeCB.action == IdiaNone) {
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
         // Setup deprovision
 
         /*
         *  Deprovision this device
         */
-        activeCB = (IdiActiveCB){0};
-        activeCB.action = IdiaDeprovision;
-        activeCB.ReqIndex = request_index;
-        activeCB.dev = dev;
-        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaDeprovision;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->timeout = IDI_ACTION_LONG_TIMEOUT;
     }
     else {
         // ideally this should not happen if we implement adaquate queue of activeCBs
         idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -694,8 +724,6 @@ int OnDevDeprovisionCb(int request_index, IdlDev *dev)
 int OnDevReplaceCb(int request_index, IdlDev *dev, char *args)
 {
     int idlError = IErr_Success;
-//    printf("%s: UNID: %s, ARGS: %s\n", __FUNCTION__,
-//        (dev && dev->unid) ? dev->unid : "NULL", (args) ? args : "NULL");
 		
     printf("\n%s:\n", __FUNCTION__);			// Print out the called function to the console
 	
@@ -717,30 +745,26 @@ int OnDevReplaceCb(int request_index, IdlDev *dev, char *args)
 		(args) ? args : "NULL"
     );
 
-    idlError = DevSetCustomIdiDevData(dev);
-    if (idlError == IErr_Success) {
-        if (activeCB.action == IdiaNone) {
-            // Setup replace
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
+        // Setup replace
 
-            /*
-            *  Slot in the new device and deprovision the old device.
-            */
-            
-            activeCB = (IdiActiveCB){0};
-            activeCB.action = IdiaReplace;
-            activeCB.ReqIndex = request_index;
-            activeCB.dev = dev;
-            activeCB.args = args;
-            activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
-        }
-        else {
-            // ideally this should not happen if we implement adaquate queue of activeCBs
-            idlError = IErr_IdiBusy;
-        }
+        /*
+        *  Slot in the new device and deprovision the old device.
+        */
+        
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaReplace;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->args = args;
+        pACB->timeout = IDI_ACTION_LONG_TIMEOUT;
     }
     else {
-        IdlDevReplaceResult(request_index, dev, idlError);
+        // ideally this should not happen if we implement adaquate queue of activeCBs
+        idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -770,23 +794,25 @@ int OnDevDeleteCb(int request_index, IdlDev *dev)
         dev->type
     );
 
-    if (activeCB.action == IdiaNone) {
+    IdiActiveCB *pACB = GetFreeActiveCB();
+    if (pACB) {
         // Setup delete
 
         /*
         *  Delete this device
         */
 
-        activeCB = (IdiActiveCB){0};
-        activeCB.action = IdiaDelete;
-        activeCB.ReqIndex = request_index;
-        activeCB.dev = dev;
-        activeCB.timeout = IDI_ACTION_LONG_TIMEOUT;
+        *pACB = (IdiActiveCB){0};
+        pACB->action = IdiaDelete;
+        pACB->ReqIndex = request_index;
+        pACB->dev = dev;
+        pACB->timeout = IDI_ACTION_LONG_TIMEOUT;
     }
     else {
         // ideally this should not happen if we implement adaquate queue of activeCBs
         idlError = IErr_IdiBusy;
     }
+    printf(" idlError: %s\n", IErrToStr(idlError));
 
     return idlError;
 }
@@ -813,13 +839,6 @@ uint randint(uint n) {
     while ((r = rand()) >= end);
 
     return r % n;
-}
-
-/* IsProcessingDone: a function returning true 60% of a time to simulate a busy condition */
-bool IsSimulateProcessingDone() {
-    uint digit =  randint(9);
-    // printf("random digit: %u\n", digit);
-    return (digit < 6) ? true : false;
 }
 
 /* ConvertDoubleValueToJson: a function taken directly from Idl library to convert double  */
@@ -1010,13 +1029,26 @@ void *IdiProcAsynchThreadFunction(void* argA)
     {
 		/* Custom code for processing callback requests asynchronously */
         /* Ideally we should implement an adaquate queue of activeCBs  */
-        IdiBlockWhileBusy(activeCB);
+        IdiBlockWhileBusy(gActiveCB);
 
 
-		usleep(50000); 			// 50 ms
+		usleep(1000); 			// 1 ms
     }
 
     return NULL;
+}
+
+/* IsFsmProcessingDone: a function returning true when processing is done */
+/*   This routine typically implement a state machine for processing aCBs */
+bool IsFsmProcessingDone(IdiActiveCB& aCB) {
+#ifdef ENABLE_SIMULATION
+    // returning true 60% of a time to simulate a busy condition
+    uint digit =  randint(9);
+    // printf("random digit: %u\n", digit);
+    return (digit < 6) ? true : false;
+#else
+    return true;
+#endif
 }
 
 /* IdiGenericResultFsm: Example routine implementing a finite state machine */
@@ -1034,10 +1066,14 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
                 /*
                 *  Create a device
                 */
-               if (!IsSimulateProcessingDone()) {
-                   /* simulate a busy condition (not done) */
-                   idlError = IErr_IdiBusy;
-               }
+                if (!IsFsmProcessingDone(aCB)) {
+                    /* busy (not done) */
+                    idlError = IErr_IdiBusy;
+                }
+                else {
+                    // allocate per device's storage
+                    idlError = DevSetCustomIdiDevData(aCB.dev);
+                }
             } else {
                 printf("%s: Malformed IdlDev", __FUNCTION__);
                 idlError = IErr_Failure;
@@ -1046,7 +1082,6 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
             if (idlError != IErr_IdiBusy) {
                 IdiFree(aCB.args);      // required
                 IdlDevCreateResult(aCB.ReqIndex, aCB.dev, idlError);
-                aCB.action = IdiaNone;
             }
             break;
         case IdiaDelete:
@@ -1054,8 +1089,8 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
                 /*
                 *  Delete a device
                 */
-               if (!IsSimulateProcessingDone()) {
-                   /* simulate a busy condition (not done) */
+               if (!IsFsmProcessingDone(aCB)) {
+                   /* busy (not done) */
                    idlError = IErr_IdiBusy;
                }
                else {
@@ -1064,7 +1099,7 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
                    // we do it here and not in the actual callback function so we don't 
                    // have to potentially deal with removing affected CBs from list of 
                    // CBs since we only have one active CB in this example :)
-                   DevRemoveCustomIdiDevData(aCB.dev);
+                   idlError = DevRemoveCustomIdiDevData(aCB.dev);
                }
             } else {
                 printf("%s: Malformed IdlDev", __FUNCTION__);
@@ -1073,14 +1108,17 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
 
             if (idlError != IErr_IdiBusy) {
                 IdiFree(aCB.args);      // required
+                printf("\n%s: Calling IdlDevDeleteResult for dev name: %s with idlError=%d\n", 
+                                __FUNCTION__, aCB.dev->info.name, idlError);
                 IdlDevDeleteResult(aCB.ReqIndex, aCB.dev, idlError);
-                aCB.action = IdiaNone;
+                printf("\n%s: Returning from IdlDevDeleteResult for dev name: %s with idlError=%d\n", 
+                                __FUNCTION__, aCB.dev->info.name, idlError);
             }
             break;
         case IdiaReplace:
             if (aCB.dev && aCB.dev->handle) {
-                if (!IsSimulateProcessingDone()) {
-                    /* simulate a busy condition (not done) */
+                if (!IsFsmProcessingDone(aCB)) {
+                    /* busy (not done) */
                     idlError = IErr_IdiBusy;
                 }
                 else {
@@ -1098,14 +1136,13 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
             if (idlError != IErr_IdiBusy) {
                 IdiFree(aCB.args);      // required
                 IdlDevReplaceResult(aCB.ReqIndex, aCB.dev, idlError);
-                aCB.action = IdiaNone;
             }
             break;
         case IdiaDpwrite:
             /*
              *  Do our write
              */
-            if (IsSimulateProcessingDone()) {
+            if (IsFsmProcessingDone(aCB)) {
                 T_DpSto *pDpStruc = (T_DpSto *)(aCB.dp->idiDpData);
                 if (pDpStruc) {
                     if (*pDpStruc->pDpValue) {
@@ -1130,10 +1167,9 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
                     printf(" Write error: Unitialized idiDpData - device possibly has been deleted!\n");
                 }
                 IdlDpWriteResult(aCB.ReqIndex, aCB.dev, aCB.dp, idlError);
-                aCB.action = IdiaNone;
             }
             else {
-                /* simulate a busy condition (not done) */
+                /* busy (not done) */
                 idlError = IErr_IdiBusy;
             }
             break;
@@ -1141,7 +1177,7 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
             /*
              *  Do our read
              */
-            if (IsSimulateProcessingDone()) {
+            if (IsFsmProcessingDone(aCB)) {
                 T_DpSto *pDpStruc = (T_DpSto *)(aCB.dp->idiDpData);
                 double dpValue = 0;
                 if (pDpStruc) {
@@ -1175,10 +1211,9 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
                     printf(" Read error: Unitialized idiDpData - device possibly has been deleted!\n");
                 }
                 IdlDpReadResult(aCB.ReqIndex, aCB.dev, aCB.dp, aCB.context, idlError, prio_array, dpValue);
-                aCB.action = IdiaNone;
             }
             else {
-                /* simulate a busy condition (not done) */
+                /* busy (not done) */
                 idlError = IErr_IdiBusy;
             }
             break;
@@ -1186,12 +1221,11 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
             /*
              *  Provision our device
              */
-            if (IsSimulateProcessingDone()) {
-                aCB.action = IdiaNone;
+            if (IsFsmProcessingDone(aCB)) {
                 IdlDevProvisionResult(aCB.ReqIndex, aCB.dev, IErr_Success);
             }
             else {
-                /* simulate a busy condition (not done) */
+                /* busy (not done) */
                 idlError = IErr_IdiBusy;
             }
             break;
@@ -1199,17 +1233,15 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
             /*
              *  Deprovision our device
              */
-            if (IsSimulateProcessingDone()) {
-                aCB.action = IdiaNone;
+            if (IsFsmProcessingDone(aCB)) {
                 IdlDevDeprovisionResult(aCB.ReqIndex, aCB.dev, IErr_Success);
             }
             else {
-                /* simulate a busy condition (not done) */
+                /* busy (not done) */
                 idlError = IErr_IdiBusy;
             }
             break;
         default:
-            aCB.action = IdiaNone;     // unknown, clear it.
             break;
     }
     aCB.lastError = idlError;       // remember last processing error
@@ -1217,7 +1249,7 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
 }
 
 // This implementation example is not ideal but works to show asynchronous callback processing..
-// An ideal custom driver should not be blocking the FSM while processing a long callback.
+// An ideal custom driver should implement an adaquate queue of activeCBs to prevent callbacks to block.
 // The while loop below with its sleep function call should be avoided if possible.
 int IdiBlockWhileBusy(IdiActiveCB& aCB) {
     int idlError = IErr_Success;
@@ -1226,9 +1258,9 @@ int IdiBlockWhileBusy(IdiActiveCB& aCB) {
     if (aCB.action != IdiaNone) {
         time_t timeStart = time(NULL);
         while (aCB.action != IdiaNone) {
-            IdiGenericResultFsm(aCB);
-            // check again -
-            if (aCB.action == IdiaNone) {
+            idlError = IdiGenericResultFsm(aCB);
+            if (idlError != IErr_IdiBusy) {
+                aCB.action = IdiaNone;     // done, clear the action for a new callback action.
                 break;
             }
             else {
@@ -1245,7 +1277,7 @@ int IdiBlockWhileBusy(IdiActiveCB& aCB) {
                     idlError = IErr_Failure;
                     break;
                 }
-                usleep(5000);
+                usleep(1000);   // 1 ms
             }
         }
     }

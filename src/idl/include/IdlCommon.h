@@ -124,6 +124,7 @@
 #define XIF_PATH_STR            "xif_dir_absolute_path"
 #define XIF_FT_SUF_STR          "_xif"
 #define DISCOV_CONF_STR         "isDiscoverySupported"
+#define RESTORE_PROVISION_STR   "provisioned"
 #define DO_STR                  "do"
 #define STS_STR                 "sts"
 #define CFG_STR                 "cfg"

@@ -2,30 +2,25 @@
 # Please change the following lines to customize your IDL driver #
 ##################################################################
 
-# CDNAME:         driver/protocol name
-CDNAME=test
+# CDNAME:         driver/protocol name.
+CDNAME=example
 # CDDESC:         driver's description
 CDDESC="$(CDNAME) driver for SmartServer IoT"
 # CDDEVLIMIT:     driver's supported maximum device limit (10 for this example)
 CDDEVLIMIT=10
-# CDPROGRAMIDS:   driver's supported list of program_IDs in double quotes
-#                 NOTES: starts with opening brace and close with closing brace
-#                        preceed all double quotes(") with backlashes(\)
-#                        no whitespace(s) between comma(s)
-CDPROGRAMIDS={\"9B0001050004ED00\",\"9B0001050004EE00\"}
 # CDVERSION:      driver version string
-CDVERSION=1.00.004
+CDVERSION=1.00.001
 # CDEXTENSION:    driver XIF file extension
 CDEXTENSION=".xpl"
 # CDCOPYRIGHT:    driver copy right string
-CDCOPYRIGHT="Copyright 2019 - 2022 Dialog Semiconductor.  All Rights Reserved."
+CDCOPYRIGHT="Copyright 2019 - 2022 ACME Corp.  All Rights Reserved."
 # CDMANUFACTURER: driver manufacturer
-CDMANUFACTURER="Dialog Semiconductor, A Renesas Company"
+CDMANUFACTURER="ACME Corporation"
 # CDLICENSE:      driver license string/info
-CDLICENSE="Dialog $(CDNAME) Custom Driver License"
+CDLICENSE="ACME $(CDNAME) Custom Driver License"
 # CDSOURCES:      driver's list of source files to compile & build
 CDSOURCES=src/example.cpp src/eti.cpp
-# CDINCETI:	      include ETI example
+# CDINCETI:	      to exclude ETI example, clear the following line
 CDINCETI=-DINCLUDE_ETI
 # CDCFLAGS:       list of C/C++ compilation flags such as -0g -ggdb (for debug build)
 CDCFLAGS=-Og -ggdb
@@ -49,7 +44,7 @@ CROSS_COMPILER=arm-linux-gnueabihf-
 INCLUDES = -I$(IDI_PATH)/src
 INCLUDES += -I$(IDI_PATH)/src/idl/include
 INCLUDES += -L$(IDI_PATH)/src/idl/lib
-CFLAGS += -g $(CDCFLAGS) -Wall $(INCLUDES) -DCDNAME=\"$(CDNAME)\" -DCDDEVLIMIT=$(CDDEVLIMIT) -DCDPROGRAMIDS="$(CDPROGRAMIDS)" $(CDINCETI)
+CFLAGS += $(CDCFLAGS) -Wall $(INCLUDES) -DCDNAME=\"$(CDNAME)\" -DCDDEVLIMIT=$(CDDEVLIMIT) $(CDINCETI)
 LIBS=-lidl -lmosquitto -lpthread -lrt $(CDLIBS)
 
 CSRC = src/main.cpp $(CDSOURCES)

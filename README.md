@@ -13,7 +13,7 @@ Create and test a custom driver for the SmartServer IoT by following these steps
 	The output of the build process will be a GLPO file with an installation script and driver image embedded in the file.  The default output will be in build/release/example_driver.glpo.  Copy this glpo file along with the 
 	XIF files to your workstation running the SmartServer IoT CMS software.
 8.  Create a new driver-specific XIF file by copying and modifying the example_xif.xpl file found in the 
-    smartserver-driver-template project. Make sure your program_ID listed in your XIF file matches the CDPROGRAMIDS listed in the Makefile.
+    smartserver-driver-template project.
 9.  Using the SmartServer IoT CMS' Device Widget with the SEGMENT CONTROLLER tab selected: 
     * Click on the vertical three dots next to the SmartServer IoT to select the Update menu.
     * Drag and drop the newly created GLPO file into the Update Loader (Drop new update loader here) box, 

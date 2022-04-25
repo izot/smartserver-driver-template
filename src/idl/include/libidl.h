@@ -350,6 +350,7 @@ typedef struct _DevMgmt {
     unsigned int isDeviceModbusRTU:1;
     unsigned int isDevMarginal:1;
     unsigned int isDevLicensed:1;
+    unsigned int isDevStateProvision:1;
     unsigned int offlineCount;
     unsigned long blockCount;         // is used to manage interface restore
     unsigned long xifBlockCount;      // number of blocks available in XIF file
