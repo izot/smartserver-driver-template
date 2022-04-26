@@ -6,6 +6,7 @@ Create and test a custom driver for the SmartServer IoT by following these steps
     SmartServer IoT.
 2.  Using an editor open the Makefile and change the driver to a driver-specific information :
 	The driver identifier, driver name, description, manufacturer, license, version, filetype, an extension.
+	NOTE: Currently there is no support for CamelCase driver naming convention.
 3.  Add any required additional components such as a protocol stack to the build script.
 4.  If necessary, change/add/complete the implementation of the required call-back functions.  The example driver
     provides a minimum implementation required to do device creation, provisioning, reading, writing and deletion.

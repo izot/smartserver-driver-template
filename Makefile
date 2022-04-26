@@ -2,7 +2,7 @@
 # Please change the following lines to customize your IDL driver #
 ##################################################################
 
-# CDNAME:         driver/protocol name.
+# CDNAME:         driver/protocol name, all in lower case (no CamelCase naming convention)
 CDNAME=example
 # CDDESC:         driver's description
 CDDESC="$(CDNAME) driver for SmartServer IoT"

@@ -69,6 +69,7 @@ typedef struct _DrvInfo {
 	struct mosquitto *mosq;			    // mosquitto message queue for all devices
     mqd_t devActQueue;				    // message Queue for sending pending device actions to vTaskDevAct
 #endif
+    pthread_mutex_t mutex;
 } T_DrvInfo;
 
 

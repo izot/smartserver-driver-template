@@ -38,16 +38,17 @@ int DevReadPublish(T__DevStoPtr pDev, uint reg)
 
         int pubQoS = MQTT_PUB_QOS;
         bool bRetain = RETAIN_FALSE;
-		dbg_printf("Publishing:\nTopic:%s\nData:null - with QOS=%d, retain=%s\n", 
-                    topicStr, pubQoS, (bRetain) ? "true" : "false");
-		retVal = mosquitto_publish(mosqOf(pDev), NULL, topicStr, 0, NULL, pubQoS, bRetain);
+        const char *pData = " ";    // use wihitespace to prevent the broker from deleting the unretained topic
+		// dbg_printf("%s Publishing:\nTopic:%s\nData:%s - with QOS=%d, retain=%s\n",  __FUNCTION__,
+        //             topicStr, pData,pubQoS, (bRetain) ? "true" : "false");
+		retVal = mosquitto_publish(mosqOf(pDev), NULL, topicStr, strlen(pData), pData, pubQoS, bRetain);
 		if (retVal != MOSQ_ERR_SUCCESS) {
-			err_printf("ERROR %s: mosquitto_publish failed on topic=%s msg=null\n",
+			err_printf("ERROR: %s- mosquitto_publish failed on topic=%s msg=null\n",
 						__FUNCTION__, topicStr);
 		}
 	}
 	else {
-        err_printf("ERROR %s: reg[%d] is not a valid register\n", __FUNCTION__, reg);
+        err_printf("ERROR: %s- reg[%d] is not a valid register\n", __FUNCTION__, reg);
 	}
 			
     return retVal;
@@ -69,11 +70,11 @@ int DevWritePublish(T__DevStoPtr pDev, uint reg, cJSON *pJsonNewVal)
 		outStr = cJSON_PrintUnformatted(pJsonNewVal);
         int pubQoS = MQTT_PUB_QOS;
         bool bRetain = RETAIN_FALSE;
-		dbg_printf("Publishing:\nTopic:%s\nData:%s - with QOS=%d, retain=%s\n", 
+		dbg_printf("%s Publishing:\n  Topic:%s\n  Data:%s - with QOS=%d, retain=%s\n",  __FUNCTION__,
                     topicStr, outStr, pubQoS, (bRetain) ? "true" : "false");
 		retVal = mosquitto_publish(mosqOf(pDev), NULL, topicStr, strlen(outStr), outStr, pubQoS, bRetain);
 		if (retVal != MOSQ_ERR_SUCCESS) {
-			err_printf("ERROR %s: mosquitto_publish failed on topic=%s msg=%s\n",
+			err_printf("ERROR: %s- mosquitto_publish failed on topic=%s msg=%s\n",
 						__FUNCTION__, topicStr, outStr);
 		}
 		/* clean-up */
@@ -81,9 +82,9 @@ int DevWritePublish(T__DevStoPtr pDev, uint reg, cJSON *pJsonNewVal)
 	}
 	else {
 		if (regValVectorOf(pDev))
-			err_printf("ERROR %s: reg[%d] is not a valid register\n", __FUNCTION__, reg);
+			err_printf("ERROR: %s- reg[%d] is not a valid register\n", __FUNCTION__, reg);
 		else
-			err_printf("ERROR %s:pDev->regValuesVector is not initialized\n", __FUNCTION__);
+			err_printf("ERROR: %s- pDev->regValuesVector is not initialized\n", __FUNCTION__);
 	}
 			
     return retVal;
@@ -100,12 +101,12 @@ static int DevRegEvHndl(T__DevStoPtr pDev, char *pUnid, char *topic, char *msg)
     if (GetTopicField(tempStr, ETI_REG_VAL_INDEX, regId) == SUCCESS) {
         // get the register id
         uint reg = strtol(regId, NULL, 10);
-        info_printf("INFO %s: processing reg(id=%s/%d) unid=%s in the pDevStor(%p) list\n", 
-                    __FUNCTION__, regId, reg, unidOf(pDev), pDev);
+        //dbg_printf("%s: processing reg(id=%s/%d) unid=%s in the pDevStor(%p) list\n", 
+        //          __FUNCTION__, regId, reg, unidOf(pDev), pDev);
         if (reg < regMaxOf(pDev)) {
             T_DpValPtr pRegValEntry = &regValOf(pDev, reg);
             if (msg && strlen(msg) > 0) {
-                info_printf("INFO %s: regId=%s, msg=%s\n", __FUNCTION__, regId,  msg);
+                // info_printf("INFO %s: regId=%s, msg=%s\n", __FUNCTION__, regId,  msg);
                 cJSON *pNewValJson = IdlStringTocJSON(msg);
                 if (pNewValJson) {
                     char *pNewVal = cJSON_PrintUnformatted(pNewValJson);
@@ -119,33 +120,31 @@ static int DevRegEvHndl(T__DevStoPtr pDev, char *pUnid, char *topic, char *msg)
                             // different value, free old and replace with new
                             cJSON_free(*pRegValEntry);
                             *pRegValEntry = pNewValJson;
-                            info_printf("INFO %s: save pNewValJson=%s to reg[%s]\n", __FUNCTION__, pNewVal, regId);
+                            // dbg_printf("%s: save pNewValJson=%s to reg[%s]\n", __FUNCTION__, pNewVal, regId);
                         }
                     }
                     else {
                         // no existing value, save new value
                         *pRegValEntry = pNewValJson;
-                        info_printf("INFO %s: set pNewValJson=%s to reg[%s]\n", __FUNCTION__, pNewVal, regId);
+                        // dbg_printf("%s: set pNewValJson=%s to reg[%s]\n", __FUNCTION__, pNewVal, regId);
                     }
                     cJSON_free(pNewVal);
                 }
                 else {
-                    info_printf("INFO %s: pNewValJson is null for reg[%d]\n", __FUNCTION__, reg);
+                    // dbg_printf("%s: pNewValJson is null for reg[%d]\n", __FUNCTION__, reg);
                 }
             }
             else {
                 cJSON_free(*pRegValEntry);
                 *pRegValEntry = NULL;
-                info_printf("INFO %s: no new value (null msg) for reg[%d]\n", __FUNCTION__, reg);
+                // dbg_printf("%s: no new value (null msg) for reg[%d]\n", __FUNCTION__, reg);
             }
         }
         else {
-            err_printf("ERROR %s: reg[%u] is not a valid register in the ev topic=%s\n",
-                        __FUNCTION__, reg, topic);
+            err_printf("ERROR: %s- reg[%u] is not a valid register in the ev topic=%s\n", __FUNCTION__, reg, topic);
         }
     } else {
-        err_printf("ERROR %s: no register id found in the ev topic=%s\n",
-                    __FUNCTION__, topic);
+        err_printf("ERROR: %s- no register id found in the ev topic=%s\n", __FUNCTION__, topic);
     }
 
     return retVal;
@@ -162,6 +161,7 @@ static int DevEvHndl(T_DrvInfoPtr pDrvInfo, char *topic, char *msg)
     // eti/0/%s/dev
     int len = sprintf(tempStr, ETI_CAT_DEV_KEY_TOPIC_FMT, ETI_CAT_EV_STR);
     if (topic && len > 0) {
+    	dbg_printf("%s processing topic: %s\n", __FUNCTION__, topic);
         if (strncmp(topic, tempStr, strlen(tempStr)) == 0) {
             // matched eti/0/ev/dev 
             strcpy(tempStr, topic);
@@ -174,11 +174,11 @@ static int DevEvHndl(T_DrvInfoPtr pDrvInfo, char *topic, char *msg)
                     // We linearly walk through the list of nodes to find the proper node with
                     // matching unid.. It's not efficient but does the job for this eti example
                     T_DevNodePtr pDevStorNode = pDrvInfo->pHeadDevNode;
-                    info_printf("INFO %s: searching for device with unid=%s in the pHeadDevNode(%p) list\n",
-                                    __FUNCTION__, unid, pDrvInfo->pHeadDevNode);
+                    // dbg_printf("%s: searching for device with unid=%s in the pHeadDevNode(%p) list\n",
+                    //                 __FUNCTION__, unid, pDrvInfo->pHeadDevNode);
                     while (pDevStorNode) {
-                        info_printf("INFO %s: processing device with unid=%s in the pDevStorNode(%p) list\n", 
-                                    __FUNCTION__, unidOfNode(pDevStorNode), pDevOfNode(pDevStorNode));
+                        // dbg_printf("%s: processing device with unid=%s in the pDevStorNode(%p) list\n", 
+                        //            __FUNCTION__, unidOfNode(pDevStorNode), pDevOfNode(pDevStorNode));
                         if (strcmp(unidOfNode(pDevStorNode), unid) == 0) {
                             // found the device node ptr
                             retVal = DevRegEvHndl(pDevOfNode(pDevStorNode), unidOfNode(pDevStorNode), topic, msg);
@@ -188,24 +188,24 @@ static int DevEvHndl(T_DrvInfoPtr pDrvInfo, char *topic, char *msg)
                         pDevStorNode = pNextOfNode(pDevStorNode);
                         // it's a doubly linked list
                         if (pDevStorNode == pDrvInfo->pHeadDevNode) {
-                            info_printf("INFO %s: done processing (end of list)\n", __FUNCTION__);
+                            // dbg_printf("%s: done processing (end of list)\n", __FUNCTION__);
                             break; // we are done
                         }
                     }
                     if (!bFound) {
-                        err_printf("ERROR %s: unable to find device with unid=%s in the pHeadDevNode list\n", 
+                        err_printf("ERROR: %s- unable to find device with unid=%s in the pHeadDevNode list\n", 
                                     __FUNCTION__, unid);
                     }
                 }
                 else {
-                    err_printf("ERROR %s: no reg key found in the ev topic\n", __FUNCTION__);
-                    err_printf("ERROR %s: ev topic; %s\n", __FUNCTION__, topic);
+                    err_printf("ERROR: %s- no reg key found in the ev topic\n", __FUNCTION__);
+                    err_printf("ERROR: %s- ev topic; %s\n", __FUNCTION__, topic);
                 }
             }
         }
         else {
-            err_printf("ERROR %s: no matching of dev key found in the ev topic\n", __FUNCTION__);
-            err_printf("ERROR %s: ev topic; %s\n", __FUNCTION__, topic);
+            err_printf("ERROR: %s- no matching of dev key found in the ev topic\n", __FUNCTION__);
+            err_printf("ERROR: %s- ev topic; %s\n", __FUNCTION__, topic);
         }
     }
 
@@ -214,7 +214,7 @@ static int DevEvHndl(T_DrvInfoPtr pDrvInfo, char *topic, char *msg)
 
 
 /* This thread handles all device related operations */
-static void *vTaskDevAct(void *pvArg)
+static void *vEtiTaskDevAct(void *pvArg)
 {
     int retVal = 0;
     EtiDevActData msg = {0};
@@ -284,7 +284,7 @@ static void EtiMessageCb(struct mosquitto *mosq, void *obj, const struct mosquit
 	if (message->payload) {
 		dmsg.payload = (char *)calloc(message->payloadlen + 1, sizeof(char));
 		if (dmsg.payload == NULL) {
-			err_printf("ERROR %s: calloc failed\n", __FUNCTION__);
+			err_printf("ERROR: %s- calloc failed\n", __FUNCTION__);
 			free(dmsg.topic);
 			return;
 		}
@@ -302,7 +302,7 @@ static void EtiMessageCb(struct mosquitto *mosq, void *obj, const struct mosquit
 		err_printf("WARN: %s- Failed to send data to devActQueue, err=%d\n",
 				__FUNCTION__, errno);
 	} else {
-		dbg_printf("Sent msg on devActQueue\n");
+		dbg_printf("%s Sent msg on devActQueue\n", __FUNCTION__);
 	}
 }
 
@@ -317,6 +317,7 @@ static int SubToDeviceCatTopic(T_DrvInfoPtr pDrvInfo, const char *cat, const cha
      *    eti/0/%s/dev/%s/reg/#
      */
 	snprintf(devTopic, sizeof(devTopic), ETI_CAT_DEV_SUBSC_TOPIC_FMT, cat, unid);
+    info_printf("INFO: eti subscribes to device topic: %s", devTopic);
 	mosquitto_subscribe(pDrvInfo->mosq, NULL, devTopic, MQTT_SUB_QOS);
     return SUCCESS;
 }
@@ -333,16 +334,16 @@ static int CreateQueue(mqd_t *queueHndl, const char *name, int isBlocking, int q
 
     if (getrlimit(RLIMIT_MSGQUEUE, &mqLimit) == 0) {
         hardLimit = mqLimit.rlim_max;
-        dbg_printf("Old mqLlimit -> soft limit= %ld, hard limit= %ld\n", mqLimit.rlim_cur, mqLimit.rlim_max); 
+        dbg_printf("%s Old mqLlimit -> soft limit= %ld, hard limit= %ld\n", __FUNCTION__, mqLimit.rlim_cur, mqLimit.rlim_max); 
         if (hardLimit <= 0xfffffff) {
             hardLimit = 0xfffffff;
             mqLimit.rlim_max = hardLimit;
             mqLimit.rlim_cur = hardLimit;
             if (setrlimit(RLIMIT_MSGQUEUE, &mqLimit) == 0) {
-                dbg_printf("successfully set limits\n");
-                dbg_printf("new hardLimit = %ld\n", hardLimit);
+                dbg_printf("%s successfully set limits\n", __FUNCTION__);
+                dbg_printf("%s new hardLimit = %ld\n", __FUNCTION__, hardLimit);
             } else {
-                dbg_printf("Error: could not set mqlimit, errno = %d\n", errno);
+                dbg_printf("%s error in setting mqlimit, errno = %d\n", __FUNCTION__, errno);
             }
         }
     }
@@ -358,16 +359,16 @@ static int CreateQueue(mqd_t *queueHndl, const char *name, int isBlocking, int q
         *queueHndl = mq_open(name, qFlags, qPerms, &qAttr);
         if (*queueHndl == (mqd_t) -1)
         {
-            dbg_printf("Unable to create mqueue %s, errno = %d\r\n", name, errno);
+            dbg_printf("%s Unable to create mqueue %s, errno = %d\r\n", __FUNCTION__, name, errno);
             if (errno == 17)                                                                          
             {   
                 /* Delete existing queue and try again */
                 mq_unlink(name);
-                dbg_printf("Opening queue again after unlink\n");
+                dbg_printf("%s Opening queue again after unlink\n", __FUNCTION__);
                 *queueHndl = mq_open(name, qFlags, qPerms, &qAttr);                           
                 if (*queueHndl == (mqd_t) -1)
                 {   
-                    printf("ERROR: %s- Not able to create mqueue %s"
+                    err_printf("ERROR: %s- Not able to create mqueue %s"
                             "after unlinking, errno = %d\n", 
                             name, __FUNCTION__, errno);
                 } else {
@@ -404,7 +405,7 @@ static int CreateThread(pthread_t *pThreadHndl, const char *name, int stackSize,
                 __FUNCTION__, name, errno);
     } else {
         retVal = SUCCESS;
-        dbg_printf("%s thread created successfully\n", name);
+        dbg_printf("%s thread %s created successfully\n", __FUNCTION__, name);
     }
 
     return retVal;
@@ -415,53 +416,63 @@ pthread_t* EtiInit(T_DrvInfoPtr pDrvInfo)
 {
     static pthread_t threadDevAct = {0};  // static pthread object
 	int rc = SUCCESS;
+    char qName[FIELD_LENGTH];
 
-	rc = CreateQueue(&pDrvInfo->devActQueue, DEV_ACT_Q, BLOCKING_Q, MQ_HARD_LIM, sizeof(EtiDevActData));
+    sprintf(qName, ETI_ACT_Q, CDNAME);
+	rc = CreateQueue(&pDrvInfo->devActQueue, qName, BLOCKING_Q, MQ_HARD_LIM, sizeof(EtiDevActData));
 	if (rc != SUCCESS) {
-        info_printf("INFO: CreateQueue %s failed\n", DEV_ACT_Q);
+        info_printf("INFO: CreateQueue %s failed\n", qName);
 	}
 	else {
-		info_printf("INFO: CreateQueue %s successful\n", DEV_ACT_Q);
+		info_printf("INFO: CreateQueue %s successful\n", qName);
 
         mosquitto_lib_init();
         info_printf("INFO %s: passing pDrvInfo(%p) to mosquitto_new for EtiMessageCb callback\n", 
                         __FUNCTION__, pDrvInfo);
-        pDrvInfo->mosq = mosquitto_new(MOSQ_CLIENT_ID, true, pDrvInfo);
-        
-        //mosquitto_threaded_set(simDevInfo.mosq, true);
+        sprintf(qName, ETI_MOSQ_CLIENT_ID, CDNAME);
+        pDrvInfo->mosq = mosquitto_new(qName, true, pDrvInfo);
+        if (pDrvInfo->mosq) {
+            info_printf("INFO: Created mosquitto queue with client id: %s and mosq(%p)\n", qName, pDrvInfo->mosq);
             
-        /* Set up a callback function for receiving ETI MQTT    */
-        /* messages for topics we subscribe to, e.g. rq and set */
-        
-        mosquitto_message_callback_set(pDrvInfo->mosq, EtiMessageCb);		// Set up a callback function 
+            //mosquitto_threaded_set(simDevInfo.mosq, true);
+                
+            /* Set up a callback function for receiving ETI MQTT    */
+            /* messages for topics we subscribe to, e.g. rq and set */
             
-        rc = mosquitto_connect(pDrvInfo->mosq, MQTT_BROKER_ADDR, MQTT_BROKER_PORT, 
-                MQTT_DEFAULT_KEEP_ALIVE_TIME);
-        if (rc) {
-            err_printf("ERROR: %s- Can't connect to Mosquitto server. "
-                    "mosquitto_connect failed with rc = %d\n", 
-                    __FUNCTION__, rc);
-            if (rc == MOSQ_ERR_ERRNO) {
-                err_printf("rc = MOSQ_ERR_ERRNO. A system call returned errno %d\n", errno);
-            }
-        } else {
-            info_printf("INFO: mosquitto_connect successful\n");
-
-            /* Subscribe to the Example Test I/O (ETI) MQTT ev for wildcard dev topic */
-            SubToDeviceCatTopic(pDrvInfo, ETI_CAT_EV_STR, WILDCARD_SUB_PLUS);
-            
-            if (CreateThread(&threadDevAct, "vTaskDevAct", TASK_DEVACT_STACK_SIZE, 
-                                            vTaskDevAct, pDrvInfo) == SUCCESS) {
-                if (mosquitto_loop_start(pDrvInfo->mosq) != 0) {
-                    err_printf("ERROR: %s- mosquitto_loop_start failed\n", __FUNCTION__);
-                    rc = FAILURE;
+            mosquitto_message_callback_set(pDrvInfo->mosq, EtiMessageCb);		// Set up a callback function 
+                
+            rc = mosquitto_connect(pDrvInfo->mosq, MQTT_BROKER_ADDR, MQTT_BROKER_PORT, 
+                    MQTT_DEFAULT_KEEP_ALIVE_TIME);
+            if (rc) {
+                err_printf("ERROR: %s- Can't connect to Mosquitto server. "
+                        "mosquitto_connect failed with rc = %d\n", 
+                        __FUNCTION__, rc);
+                if (rc == MOSQ_ERR_ERRNO) {
+                    err_printf("rc = MOSQ_ERR_ERRNO. A system call returned errno %d\n", errno);
                 }
-            }
-            else {
-                rc = FAILURE;
-                err_printf("ERROR: %s- create vTaskDevAct thread failed\n", __FUNCTION__);
-            }
+            } else {
+                info_printf("INFO: mosquitto_connect successful\n");
 
+                /* Subscribe to the Example Test I/O (ETI) MQTT ev for wildcard dev topic */
+                SubToDeviceCatTopic(pDrvInfo, ETI_CAT_EV_STR, WILDCARD_SUB_PLUS);
+                
+                if (CreateThread(&threadDevAct, "vEtiTaskDevAct", TASK_DEVACT_STACK_SIZE, 
+                                                vEtiTaskDevAct, pDrvInfo) == SUCCESS) {
+                    if (mosquitto_loop_start(pDrvInfo->mosq) != 0) {
+                        err_printf("ERROR: %s- mosquitto_loop_start failed\n", __FUNCTION__);
+                        rc = FAILURE;
+                    }
+                }
+                else {
+                    rc = FAILURE;
+                    err_printf("ERROR: %s- create vEtiTaskDevAct thread failed\n", __FUNCTION__);
+                }
+
+            }
+        }
+        else {
+            info_printf("INFO: Failed to create mosquitto queue with client id: %s and mosq(%p)\n", qName, pDrvInfo->mosq);
+            rc = FAILURE;
         }
 	}
 

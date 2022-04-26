@@ -37,7 +37,7 @@ typedef struct _IdiActiveCB {
 
 extern int IdiStart();
 
-extern void *IdiProcAsynchThreadFunction(void* argA);
+extern void *ProcAsynThrdFunc(void* argA);
 
 /* CALLBACKS */
 extern int OnDpReadCb(int request_index, IdlDev *dev, IdlDatapoint *dp, void *context);

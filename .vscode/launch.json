@@ -14,7 +14,7 @@
             "type": "cppdbg",
             "request": "launch",
             "stopAtEntry": true,
-            "program": "${workspaceFolder}/build/release/test",
+            "program": "${workspaceFolder}/build/release/example",
             "args": [],
             "cwd": "${workspaceFolder}",
             "environment": [],

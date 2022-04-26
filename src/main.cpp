@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 		/* creates a thread that could be used to process asynchronous     */
 		/* communications packets the driver needs to capture and process. */
 
-        pthread_create( &IdiProcessAsynchThread, NULL, IdiProcAsynchThreadFunction, NULL);
+        pthread_create( &IdiProcessAsynchThread, NULL, ProcAsynThrdFunc, NULL);
 
 
 		/* Initialize the IDL CDNAME Driver using the parameters defined */

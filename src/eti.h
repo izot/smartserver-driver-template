@@ -19,8 +19,8 @@
 #define MQ_HARD_LIM             10000
 #define TASK_DEVACT_STACK_SIZE  (32 * 1024)
 
-#define DEV_ACT_Q               "/dev_act_q"
-#define MOSQ_CLIENT_ID          "eti_client"
+#define ETI_ACT_Q               "/dev_act_q_%s"
+#define ETI_MOSQ_CLIENT_ID      "eti_client_%s"
 
 #define MQTT_SUB_QOS            1
 #define MQTT_PUB_QOS            1
@@ -52,12 +52,12 @@ typedef enum {
 #define ETI_DEV_KEY             "dev"
 #define ETI_REG_KEY             "reg"
 
-#define ETI_CAT_TOPIC_FMT               "eti/0/%s"
-#define ETI_CAT_DEV_KEY_TOPIC_FMT       "eti/0/%s/dev"
-#define ETI_CAT_DEV_ID_TOPIC_FMT        "eti/0/%s/dev/%s"
-#define ETI_CAT_DEV_REG_KEY_TOPIC_FMT   "eti/0/%s/dev/%s/reg"
-#define ETI_CAT_DEV_REG_ID_TOPIC_FMT    "eti/0/%s/dev/%s/reg/%d"
-#define ETI_CAT_DEV_SUBSC_TOPIC_FMT     "eti/0/%s/dev/%s/reg/#"
+#define ETI_CAT_TOPIC_FMT               "eti/" CDNAME "/%s"
+#define ETI_CAT_DEV_KEY_TOPIC_FMT       "eti/" CDNAME "/%s/dev"
+#define ETI_CAT_DEV_ID_TOPIC_FMT        "eti/" CDNAME "/%s/dev/%s"
+#define ETI_CAT_DEV_REG_KEY_TOPIC_FMT   "eti/" CDNAME "/%s/dev/%s/reg"
+#define ETI_CAT_DEV_REG_ID_TOPIC_FMT    "eti/" CDNAME "/%s/dev/%s/reg/%d"
+#define ETI_CAT_DEV_SUBSC_TOPIC_FMT     "eti/" CDNAME "/%s/dev/%s/reg/#"
 
 
 #define pDevOfNode(pNode)       (pNode->pDevSto)
