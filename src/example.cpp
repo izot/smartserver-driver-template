@@ -12,11 +12,8 @@
 
 extern Idl *idl;
 
-// For this example there is only one gActiveCB.  In real-life driver this
-// should be a linked list of activeCBs and the ProcAsynThrdFunc
-// will cycle through the list of activeCBs until no more available.
+// For this example there is only one gActiveCB.
 static IdiActiveCB gActiveCB;
-
 static T_DrvInfo gDrvInfo = {};
 
 
@@ -964,7 +961,6 @@ void *ProcAsynThrdFunc(void* argA)
     while(1)
     {
 		/* Custom code for processing callback requests asynchronously */
-        /* Ideally we should implement an adaquate queue of activeCBs  */
         pthread_mutex_lock( &gDrvInfo.mutex );
 
         IdiBlockWhileBusy(gActiveCB);
@@ -1035,10 +1031,6 @@ int IdiGenericResultFsm(IdiActiveCB& aCB)
                }
                else {
                    // free up per device's storage
-                   // NOTE:
-                   // we do it here and not in the actual callback function so we don't 
-                   // have to potentially deal with removing affected CBs from list of 
-                   // CBs since we only have one active CB in this example :)
                    idlError = DevRemoveCustomIdiDevData(aCB.dev);
                }
             } else {
