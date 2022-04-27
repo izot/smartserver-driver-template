@@ -1,7 +1,7 @@
 # smartserver-driver-template
 Example custom driver template for the Dialog SmartServer IoT Edge Server (Dialog Semiconductor is a Renesas Electronics company). Documentation is available at http://iecdocs.renesas.com.
 
-This project requires SmartServer 3.4 or newer.
+**This project requires SmartServer 3.4 or newer.**
 
 Create and test a custom driver for the SmartServer IoT by following these steps:
 1.  Console login to (or ssh into) your SmartServer IoT and make sure the git application is already install on the system.  
@@ -9,8 +9,9 @@ Create and test a custom driver for the SmartServer IoT by following these steps
 		> sudo apt-get install git
 2.  Clone the IDL example at this URL: https://github.com/izot/smartserver-driver-template.git into your 
     SmartServer IoT as follow:
-		> git clone https://github.com/izot/smartserver-driver-template.git
-		You should see the following folders/files:
+	```
+	> git clone https://github.com/izot/smartserver-driver-template.git
+	You should see the following folders/files:
 		smartserver-driver-template
 		├── ... (ignore these files)
 		├── example_xif.dtd
@@ -42,6 +43,7 @@ Create and test a custom driver for the SmartServer IoT by following these steps
     provides a minimum implementation required to do device creation, provisioning, deletion and reading/writing of datapoints.
 6.  Run make to build the new driver.
 	The output of the build process will be a GLPO file with an installation script and driver image embedded in the file.  The default output (per example driver) will be in build/release/example_driver.glpo files as follow:
+	```     
 		smartserver-driver-template
 		├── build
 		│   └── release
@@ -51,19 +53,19 @@ Create and test a custom driver for the SmartServer IoT by following these steps
 		│       │   └── ... (ignore these files)
 		│       └── image   (ignore this folder)
 		│           └── ... (ignore these files)
-	Copy this example_driver.glpo file along with the XIF (i.e. example_xif.xpl and example_xif.dtd) files to your workstation running the SmartServer IoT CMS software.
 7.  Create a new driver-specific XIF file by copying and modifying the example_xif.xpl & example_xif.dtd (csv-liked) files found in the 
-    smartserver-driver-template project as follow:
+    smartserver-driver-template project below.  For more info on XIF files, please refer to http://iecdocs.diasemi.com/display/PortSSIoT/Collecting+or+Creating+Device+Interface+%28XIF%29+Definitions
+	```     
 	Edit <your_driver>_xif.xpl
 		#filetype,<your_driver>_xif
 		#program_ID,<your_device_Program_ID>
 		#manufacturer,<your_manufacturer>
 		#description,<your_driver> xif
+	
 	Edit <your_driver>_xif.dtd
 		#filetype,dtd
 		"Device Type",Protocol,"Program ID","Default App","Default Sys","Auto App Load","Auto Sys Load","Graphics File",Default 
 		<your_driver>_device,<your_driver>,<your_device_Program_ID>,,,false,false,,false
-	(For more info on XIF files, please refer to http://iecdocs.diasemi.com/display/PortSSIoT/Collecting+or+Creating+Device+Interface+%28XIF%29+Definitions)
 8.  Using the SmartServer IoT CMS' Device Widget with the SEGMENT CONTROLLER tab selected: 
     * Click on the vertical three dots next to the SmartServer IoT to select the Update menu.
     * Drag and drop the newly created GLPO file into the Update Loader (Drop new update loader here) box, 
