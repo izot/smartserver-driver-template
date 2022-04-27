@@ -1,6 +1,8 @@
 # smartserver-driver-template
 Example custom driver template for the Dialog SmartServer IoT Edge Server (Dialog Semiconductor is a Renesas Electronics company). Documentation is available at http://iecdocs.renesas.com.
 
+This project requires SmartServer 3.4 or newer.
+
 Create and test a custom driver for the SmartServer IoT by following these steps:
 1.  Clone the IDL example at this URL: https://github.com/izot/smartserver-driver-template.git into your 
     SmartServer IoT.

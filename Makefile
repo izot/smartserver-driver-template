@@ -23,7 +23,7 @@ CDSOURCES=src/example.cpp src/eti.cpp
 # CDINCETI:	      to exclude ETI example, clear the following line
 CDINCETI=-DINCLUDE_ETI
 # CDCFLAGS:       list of C/C++ compilation flags such as -0g -ggdb (for debug build)
-CDCFLAGS=-Og -ggdb
+CDCFLAGS=
 # CDLIBS:         list of extra/thirdparty libraries used by the linker
 CDLIBS=
 

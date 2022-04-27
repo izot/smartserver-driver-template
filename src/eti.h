@@ -1,25 +1,14 @@
 #ifndef ETI_H
 #define ETI_H
 
-#include <pthread.h>
-#include <sys/resource.h> 
-
 #include "mosquitto.h"
-
-#define SUCCESS                 IErr_Success
-#define FAILURE                 IErr_Failure
 
 #define KEY_LENGTH              128
 #define FIELD_LENGTH            128
 #define UNID_LENGTH             128
 #define TEMP_STR_LENGTH         1024
 
-#define BLOCKING_Q              1
-#define NONBLOCKING_Q           0
-#define MQ_HARD_LIM             10000
-#define TASK_DEVACT_STACK_SIZE  (32 * 1024)
-
-#define ETI_ACT_Q               "/dev_act_q_%s"
+#define ETI_ACT_Q               "/dev_act_q_eti_%s"
 #define ETI_MOSQ_CLIENT_ID      "eti_client_%s"
 
 #define MQTT_SUB_QOS            1

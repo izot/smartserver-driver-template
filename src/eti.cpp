@@ -1,10 +1,41 @@
+//
+// eti.cpp
+//
+// Copyright (C) 2022 Dialog Semiconductor
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in 
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+//
+// ETI protocol support & main processing functions
+//
+
+
 #include "common.h"
 
 #ifdef INCLUDE_ETI
 
 #include "eti.h"
 
-/* Field key numbers start from 1, ie topic will be key-1/key-2/key-3/... */
+
+
+/* GetTopicField: a utility function for getting a field back given a topic and it's key field # */
+/* Field key numbers start from 1, ie topic will be key-1/key-2/key-3/...                        */
 static int GetTopicField(char *topic, int key, char *field)
 {
     if (topic == NULL) {
@@ -25,6 +56,7 @@ static int GetTopicField(char *topic, int key, char *field)
 }
 
 
+/* DevReadPublish: a utility function for publishing ETI read category topic messages */
 int DevReadPublish(T__DevStoPtr pDev, uint reg)
 {
     char topicStr[MQTT_TOPIC_SIZE] = {0};
@@ -38,7 +70,8 @@ int DevReadPublish(T__DevStoPtr pDev, uint reg)
 
         int pubQoS = MQTT_PUB_QOS;
         bool bRetain = RETAIN_FALSE;
-        const char *pData = " ";    // use wihitespace to prevent the broker from deleting the unretained topic
+        // use wihitespace to prevent the broker from deleting this type of unretained topic
+        const char *pData = " "; 
 		// dbg_printf("%s Publishing:\nTopic:%s\nData:%s - with QOS=%d, retain=%s\n",  __FUNCTION__,
         //             topicStr, pData,pubQoS, (bRetain) ? "true" : "false");
 		retVal = mosquitto_publish(mosqOf(pDev), NULL, topicStr, strlen(pData), pData, pubQoS, bRetain);
@@ -46,8 +79,7 @@ int DevReadPublish(T__DevStoPtr pDev, uint reg)
 			err_printf("ERROR: %s- mosquitto_publish failed on topic=%s msg=null\n",
 						__FUNCTION__, topicStr);
 		}
-	}
-	else {
+	} else {
         err_printf("ERROR: %s- reg[%d] is not a valid register\n", __FUNCTION__, reg);
 	}
 			
@@ -55,6 +87,7 @@ int DevReadPublish(T__DevStoPtr pDev, uint reg)
 }
 
 
+/* DevWritePublish: a utility function for publishing ETI write category topic messages */
 int DevWritePublish(T__DevStoPtr pDev, uint reg, cJSON *pJsonNewVal)
 {
     char topicStr[MQTT_TOPIC_SIZE] = {0};
@@ -62,7 +95,7 @@ int DevWritePublish(T__DevStoPtr pDev, uint reg, cJSON *pJsonNewVal)
     int retVal = FAILURE;
 
 	// ETI_CAT_DEV_REG_ID_TOPIC_FMT is not a retained topic
-	// "eti/0/wr/dev/%s/reg/%d" {"value":"%s"}
+	// "eti/CDNAME/wr/dev/%s/reg/%d" {"value":"%s"}
 
 	if (regValVectorOf(pDev) && reg < regMaxOf(pDev)) {
 		sprintf(topicStr, ETI_CAT_DEV_REG_ID_TOPIC_FMT, ETI_CAT_WR_STR, unidOf(pDev), reg);
@@ -79,8 +112,7 @@ int DevWritePublish(T__DevStoPtr pDev, uint reg, cJSON *pJsonNewVal)
 		}
 		/* clean-up */
 		free(outStr);
-	}
-	else {
+	} else {
 		if (regValVectorOf(pDev))
 			err_printf("ERROR: %s- reg[%d] is not a valid register\n", __FUNCTION__, reg);
 		else
@@ -91,6 +123,7 @@ int DevWritePublish(T__DevStoPtr pDev, uint reg, cJSON *pJsonNewVal)
 }
 
 
+/* DevEvHndl: a function for processing ETI device register's event messages */
 static int DevRegEvHndl(T__DevStoPtr pDev, char *pUnid, char *topic, char *msg) 
 {
     int retVal = FAILURE;
@@ -101,8 +134,6 @@ static int DevRegEvHndl(T__DevStoPtr pDev, char *pUnid, char *topic, char *msg)
     if (GetTopicField(tempStr, ETI_REG_VAL_INDEX, regId) == SUCCESS) {
         // get the register id
         uint reg = strtol(regId, NULL, 10);
-        //dbg_printf("%s: processing reg(id=%s/%d) unid=%s in the pDevStor(%p) list\n", 
-        //          __FUNCTION__, regId, reg, unidOf(pDev), pDev);
         if (reg < regMaxOf(pDev)) {
             T_DpValPtr pRegValEntry = &regValOf(pDev, reg);
             if (msg && strlen(msg) > 0) {
@@ -115,32 +146,24 @@ static int DevRegEvHndl(T__DevStoPtr pDev, char *pUnid, char *topic, char *msg)
                         if (cJSON_Compare(*pRegValEntry, pNewValJson, 0)) {
                             // same value, no need to replace but free new value
                             cJSON_free(pNewValJson);
-                        }
-                        else {
+                        } else {
                             // different value, free old and replace with new
                             cJSON_free(*pRegValEntry);
                             *pRegValEntry = pNewValJson;
-                            // dbg_printf("%s: save pNewValJson=%s to reg[%s]\n", __FUNCTION__, pNewVal, regId);
                         }
-                    }
-                    else {
+                    } else {
                         // no existing value, save new value
                         *pRegValEntry = pNewValJson;
-                        // dbg_printf("%s: set pNewValJson=%s to reg[%s]\n", __FUNCTION__, pNewVal, regId);
                     }
                     cJSON_free(pNewVal);
-                }
-                else {
+                } else {
                     // dbg_printf("%s: pNewValJson is null for reg[%d]\n", __FUNCTION__, reg);
                 }
-            }
-            else {
+            } else {
                 cJSON_free(*pRegValEntry);
                 *pRegValEntry = NULL;
-                // dbg_printf("%s: no new value (null msg) for reg[%d]\n", __FUNCTION__, reg);
             }
-        }
-        else {
+        } else {
             err_printf("ERROR: %s- reg[%u] is not a valid register in the ev topic=%s\n", __FUNCTION__, reg, topic);
         }
     } else {
@@ -151,6 +174,7 @@ static int DevRegEvHndl(T__DevStoPtr pDev, char *pUnid, char *topic, char *msg)
 }
 
 
+/* DevEvHndl: a function for ETI device's event messages */
 static int DevEvHndl(T_DrvInfoPtr pDrvInfo, char *topic, char *msg)
 {
     int retVal = FAILURE;
@@ -196,14 +220,12 @@ static int DevEvHndl(T_DrvInfoPtr pDrvInfo, char *topic, char *msg)
                         err_printf("ERROR: %s- unable to find device with unid=%s in the pHeadDevNode list\n", 
                                     __FUNCTION__, unid);
                     }
-                }
-                else {
+                } else {
                     err_printf("ERROR: %s- no reg key found in the ev topic\n", __FUNCTION__);
                     err_printf("ERROR: %s- ev topic; %s\n", __FUNCTION__, topic);
                 }
             }
-        }
-        else {
+        } else {
             err_printf("ERROR: %s- no matching of dev key found in the ev topic\n", __FUNCTION__);
             err_printf("ERROR: %s- ev topic; %s\n", __FUNCTION__, topic);
         }
@@ -213,8 +235,8 @@ static int DevEvHndl(T_DrvInfoPtr pDrvInfo, char *topic, char *msg)
 }
 
 
-/* This thread handles all device related operations */
-static void *vEtiTaskDevAct(void *pvArg)
+/* vTaskEtiDevAct: a thread function to handle all ETI device related operations */
+static void *vTaskEtiDevAct(void *pvArg)
 {
     int retVal = 0;
     EtiDevActData msg = {0};
@@ -223,9 +245,9 @@ static void *vEtiTaskDevAct(void *pvArg)
 
     pthread_setname_np(pthread_self(), __FUNCTION__);       // <= 16 chars
 
-    pDrvInfo->stat = EtiRunning;
-    while (pDrvInfo->stat != EtiStop) {
-        retVal = mq_receive(pDrvInfo->devActQueue, (char*)&msg, sizeof(EtiDevActData), NULL);
+    pDrvInfo->stat = IdiRunning;
+    while (pDrvInfo->stat != IdiStop) {
+        retVal = mq_receive(pDrvInfo->etiDevActQueue, (char*)&msg, sizeof(EtiDevActData), NULL);
         if(retVal == -1) {
             continue;
         }
@@ -248,6 +270,7 @@ static void *vEtiTaskDevAct(void *pvArg)
 }
 
 
+/* GetCategoryStr: a utility function for mapping topic category to string */
 static const char *GetCategoryStr(MsgCategory cat) {
 	if (cat == RD_CATEGORY)
 		return ETI_CAT_RD_STR;
@@ -260,6 +283,7 @@ static const char *GetCategoryStr(MsgCategory cat) {
 }
 
 
+/* EtiMessageCb: a MQTT callback function for processing ETI device category topic */
 static void EtiMessageCb(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
 {
 	EtiDevActData dmsg = {0};
@@ -275,8 +299,7 @@ static void EtiMessageCb(struct mosquitto *mosq, void *obj, const struct mosquit
 	}   
 	if (strncmp(message->topic, devTopic, strlen(devTopic)) == 0) {
 		dmsg.category = EV_CATEGORY;
-	}
-	else {
+	} else {
 		// no other category topic of interrest
 		return;
 	}
@@ -298,23 +321,22 @@ static void EtiMessageCb(struct mosquitto *mosq, void *obj, const struct mosquit
 	dbg_printf("%s Data :     %s\n", __FUNCTION__, (char *)(dmsg.payload));
 	dbg_printf("%s Category : %s\n", __FUNCTION__, GetCategoryStr(dmsg.category));
 
-	if (mq_send(pDrvInfo->devActQueue, (const char*)&dmsg, sizeof(dmsg), 1) != 0) {    
-		err_printf("WARN: %s- Failed to send data to devActQueue, err=%d\n",
-				__FUNCTION__, errno);
+	if (mq_send(pDrvInfo->etiDevActQueue, (const char*)&dmsg, sizeof(dmsg), 1) != 0) {    
+		err_printf("WARN: %s- Failed to send data (topic:%s, cat:%s) to etiDevActQueue, err=%d\n",
+				__FUNCTION__, dmsg.topic, GetCategoryStr(dmsg.category), errno);
 	} else {
-		dbg_printf("%s Sent msg on devActQueue\n", __FUNCTION__);
+		dbg_printf("%s Sent msg on etiDevActQueue\n", __FUNCTION__);
 	}
 }
 
 
-
-/* Sub to device category topic for single of wildcard device(s) */
+/* SubToDeviceCatTopic: a utility function for subscribing to wildcard device category topic */
 static int SubToDeviceCatTopic(T_DrvInfoPtr pDrvInfo, const char *cat, const char *unid)
 {
     char devTopic[128] = {0};
     /* We need to subscribe to device ev/rd/wr topics. 
      * All subscriptions can be done using a single topic with wildcards:
-     *    eti/0/%s/dev/%s/reg/#
+     *    eti/CDNAME/%s/dev/%s/reg/#
      */
 	snprintf(devTopic, sizeof(devTopic), ETI_CAT_DEV_SUBSC_TOPIC_FMT, cat, unid);
     info_printf("INFO: eti subscribes to device topic: %s", devTopic);
@@ -323,66 +345,7 @@ static int SubToDeviceCatTopic(T_DrvInfoPtr pDrvInfo, const char *cat, const cha
 }
 
 
-static int CreateQueue(mqd_t *queueHndl, const char *name, int isBlocking, int queueSize, int msgSize)
-{
-    long hardLimit = 0;
-    int ret = FAILURE;
-    int qFlags = 0;
-    mode_t qPerms = {0};
-    struct mq_attr qAttr = {0};
-    struct rlimit mqLimit = {0};
-
-    if (getrlimit(RLIMIT_MSGQUEUE, &mqLimit) == 0) {
-        hardLimit = mqLimit.rlim_max;
-        dbg_printf("%s Old mqLlimit -> soft limit= %ld, hard limit= %ld\n", __FUNCTION__, mqLimit.rlim_cur, mqLimit.rlim_max); 
-        if (hardLimit <= 0xfffffff) {
-            hardLimit = 0xfffffff;
-            mqLimit.rlim_max = hardLimit;
-            mqLimit.rlim_cur = hardLimit;
-            if (setrlimit(RLIMIT_MSGQUEUE, &mqLimit) == 0) {
-                dbg_printf("%s successfully set limits\n", __FUNCTION__);
-                dbg_printf("%s new hardLimit = %ld\n", __FUNCTION__, hardLimit);
-            } else {
-                dbg_printf("%s error in setting mqlimit, errno = %d\n", __FUNCTION__, errno);
-            }
-        }
-    }
-    qAttr.mq_maxmsg = queueSize;
-    qPerms = S_IRUSR | S_IWUSR;
-    qAttr.mq_msgsize = msgSize;
-    qFlags = O_CREAT | O_EXCL | O_RDWR;
-    if (isBlocking == 0) {
-        qFlags = qFlags | O_NONBLOCK;
-    }
-
-    if (name && queueSize && msgSize) {
-        *queueHndl = mq_open(name, qFlags, qPerms, &qAttr);
-        if (*queueHndl == (mqd_t) -1)
-        {
-            dbg_printf("%s Unable to create mqueue %s, errno = %d\r\n", __FUNCTION__, name, errno);
-            if (errno == 17)                                                                          
-            {   
-                /* Delete existing queue and try again */
-                mq_unlink(name);
-                dbg_printf("%s Opening queue again after unlink\n", __FUNCTION__);
-                *queueHndl = mq_open(name, qFlags, qPerms, &qAttr);                           
-                if (*queueHndl == (mqd_t) -1)
-                {   
-                    err_printf("ERROR: %s- Not able to create mqueue %s"
-                            "after unlinking, errno = %d\n", 
-                            name, __FUNCTION__, errno);
-                } else {
-                    ret = SUCCESS;
-                }
-            }
-        } else {
-            ret = SUCCESS;
-        }
-    }
-    return ret;
-}
-
-
+/* CreateThread: a utility function to create a pthread */
 static int CreateThread(pthread_t *pThreadHndl, const char *name, int stackSize, 
         void *(*startRoutine) (void *), void *arg)
 {
@@ -419,12 +382,11 @@ pthread_t* EtiInit(T_DrvInfoPtr pDrvInfo)
     char qName[FIELD_LENGTH];
 
     sprintf(qName, ETI_ACT_Q, CDNAME);
-	rc = CreateQueue(&pDrvInfo->devActQueue, qName, BLOCKING_Q, MQ_HARD_LIM, sizeof(EtiDevActData));
+	rc = IdiCreateQueue(&pDrvInfo->etiDevActQueue, qName, BLOCKING_Q, MQ_HARD_LIM, sizeof(EtiDevActData));
 	if (rc != SUCCESS) {
-        info_printf("INFO: CreateQueue %s failed\n", qName);
-	}
-	else {
-		info_printf("INFO: CreateQueue %s successful\n", qName);
+        info_printf("INFO: IdiCreateQueue %s failed\n", qName);
+	} else {
+		info_printf("INFO: IdiCreateQueue %s successful\n", qName);
 
         mosquitto_lib_init();
         info_printf("INFO %s: passing pDrvInfo(%p) to mosquitto_new for EtiMessageCb callback\n", 
@@ -456,22 +418,21 @@ pthread_t* EtiInit(T_DrvInfoPtr pDrvInfo)
                 /* Subscribe to the Example Test I/O (ETI) MQTT ev for wildcard dev topic */
                 SubToDeviceCatTopic(pDrvInfo, ETI_CAT_EV_STR, WILDCARD_SUB_PLUS);
                 
-                if (CreateThread(&threadDevAct, "vEtiTaskDevAct", TASK_DEVACT_STACK_SIZE, 
-                                                vEtiTaskDevAct, pDrvInfo) == SUCCESS) {
+                if (CreateThread(&threadDevAct, "vTaskEtiDevAct", TASK_DEVACT_STACK_SIZE, 
+                                                vTaskEtiDevAct, pDrvInfo) == SUCCESS) {
                     if (mosquitto_loop_start(pDrvInfo->mosq) != 0) {
                         err_printf("ERROR: %s- mosquitto_loop_start failed\n", __FUNCTION__);
                         rc = FAILURE;
                     }
-                }
-                else {
+                } else {
                     rc = FAILURE;
-                    err_printf("ERROR: %s- create vEtiTaskDevAct thread failed\n", __FUNCTION__);
+                    err_printf("ERROR: %s- create vTaskEtiDevAct thread failed\n", __FUNCTION__);
                 }
 
             }
-        }
-        else {
-            info_printf("INFO: Failed to create mosquitto queue with client id: %s and mosq(%p)\n", qName, pDrvInfo->mosq);
+        } else {
+            info_printf("INFO: Failed to create mosquitto queue with client id: %s and mosq(%p)\n", 
+                        qName, pDrvInfo->mosq);
             rc = FAILURE;
         }
 	}

@@ -1,3 +1,30 @@
+//
+// common.h
+//
+// Copyright (C) 2022 Dialog Semiconductor
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in 
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+//
+// Custom driver common include file for example driver and ETI protocol
+//
+
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -9,6 +36,9 @@
 #include <cstring>
 #include <mqueue.h>
 #include <time.h>
+#include <pthread.h>
+#include <sys/resource.h> 
+
 
 #include "IdlCommon.h"
 #include "libidl.h"
@@ -19,10 +49,19 @@
 // list of unrecognized columns be reported in OnDpCreateCb.
 #define AP_9580_WORKAROUND
 
-#define MAX_UNID_CHARS 132
+#define SUCCESS                 IErr_Success
+#define FAILURE                 IErr_Failure
+
+#define BLOCKING_Q              1
+#define NONBLOCKING_Q           0
+#define MQ_HARD_LIM             10000
+#define TASK_DEVACT_STACK_SIZE  (32 * 1024)
+
+#define MAX_UNID_CHARS          132
+#define Q_NAME_LENGTH           256
 
 
-#define dbg_printf(args...)     printf(args)
+#define dbg_printf(args...)     /* printf(args) */
 #define info_printf(args...)    printf(args)
 #define err_printf(...)         fprintf(stderr, __VA_ARGS__)
 
@@ -56,22 +95,24 @@ typedef struct _DevNodePtr {
     _DevNodePtr *pNext;
 } T_DevNode, *T_DevNodePtr;
 
-enum EtiStatus {
-    EtiStop = 0,                        // final stop - terminated
-    EtiRunning
+enum IdiStatus {
+    IdiStop = 0,                        // final stop - terminated
+    IdiRunning
 };
 
 typedef struct _DrvInfo {
-    EtiStatus stat;
+    IdiStatus stat;
     uint deviceEntry;                   // current device entry/count - up to CDDEVLIMIT
     T_DevNodePtr pHeadDevNode;
+    mqd_t idiDevActQueue;				// message Queue for sending pending device actions to vTaskIdiDevAct
 #ifdef INCLUDE_ETI
 	struct mosquitto *mosq;			    // mosquitto message queue for all devices
-    mqd_t devActQueue;				    // message Queue for sending pending device actions to vTaskDevAct
+    mqd_t etiDevActQueue;				// message Queue for sending pending device actions to vTaskEtiDevAct
 #endif
-    pthread_mutex_t mutex;
 } T_DrvInfo;
 
 
+
+extern int IdiCreateQueue(mqd_t *queueHndl, const char *name, int isBlocking, int queueSize, int msgSize);
 
 #endif
