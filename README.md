@@ -4,33 +4,80 @@ Example custom driver template for the Dialog SmartServer IoT Edge Server (Dialo
 This project requires SmartServer 3.4 or newer.
 
 Create and test a custom driver for the SmartServer IoT by following these steps:
-1.  Clone the IDL example at this URL: https://github.com/izot/smartserver-driver-template.git into your 
-    SmartServer IoT.
-2.  Using an editor open the Makefile and change the driver to a driver-specific information :
-	The driver identifier, driver name, description, manufacturer, license, version, filetype, an extension.
+1.  Console login to (or ssh into) your SmartServer IoT and make sure the git application is already install on the system.  
+	If not, do the following:
+		> sudo apt-get install git
+2.  Clone the IDL example at this URL: https://github.com/izot/smartserver-driver-template.git into your 
+    SmartServer IoT as follow:
+		> git clone https://github.com/izot/smartserver-driver-template.git
+		You should see the following folders/files:
+		smartserver-driver-template
+		├── ... (ignore these files)
+		├── example_xif.dtd
+		├── example_xif.xpl
+		├── Makefile
+		├── src
+		│   ├── common.h
+		│   ├── eti.cpp
+		│   ├── eti.h
+		│   ├── example.cpp
+		│   ├── example.h
+		│   ├── idl
+		│   │   ├── include
+		│   │   │   ├── cJSON.h
+		│   │   │   ├── csvin.h
+		│   │   │   ├── IdlCommon.h
+		│   │   │   └── libidl.h
+		│   │   └── lib
+		│   │       └── libidl.so
+		│   └── main.cpp
+		└── template (ignore this folder)
+			└── ...  (ignore these files)
+		5 directories, 25 files
+3.  Using an editor open the Makefile and change the driver to a driver-specific information as needed:
+	The driver identifier, driver name, description, manufacturer, license, version, filetype and file extension.
 	NOTE: Currently there is no support for CamelCase driver naming convention.
-3.  Add any required additional components such as a protocol stack to the build script.
-4.  If necessary, change/add/complete the implementation of the required call-back functions.  The example driver
-    provides a minimum implementation required to do device creation, provisioning, reading, writing and deletion.
-5.  Run make to build the new driver.  
-	The output of the build process will be a GLPO file with an installation script and driver image embedded in the file.  The default output will be in build/release/example_driver.glpo.  Copy this glpo file along with the 
-	XIF files to your workstation running the SmartServer IoT CMS software.
-8.  Create a new driver-specific XIF file by copying and modifying the example_xif.xpl file found in the 
-    smartserver-driver-template project.
-9.  Using the SmartServer IoT CMS' Device Widget with the SEGMENT CONTROLLER tab selected: 
+4.  Add any required additional components such as a protocol stack to the build script.
+5.  If necessary, change/add/complete the implementation of the required call-back functions.  The example driver
+    provides a minimum implementation required to do device creation, provisioning, deletion and reading/writing of datapoints.
+6.  Run make to build the new driver.
+	The output of the build process will be a GLPO file with an installation script and driver image embedded in the file.  The default output (per example driver) will be in build/release/example_driver.glpo files as follow:
+		smartserver-driver-template
+		├── build
+		│   └── release
+		│       ├── example_driver.glpo
+		│       ├── ...     (ignore these files)
+		│       ├── glpo    (ignore this folder)
+		│       │   └── ... (ignore these files)
+		│       └── image   (ignore this folder)
+		│           └── ... (ignore these files)
+	Copy this example_driver.glpo file along with the XIF (i.e. example_xif.xpl and example_xif.dtd) files to your workstation running the SmartServer IoT CMS software.
+7.  Create a new driver-specific XIF file by copying and modifying the example_xif.xpl & example_xif.dtd (csv-liked) files found in the 
+    smartserver-driver-template project as follow:
+	Edit <your_driver>_xif.xpl
+		#filetype,<your_driver>_xif
+		#program_ID,<your_device_Program_ID>
+		#manufacturer,<your_manufacturer>
+		#description,<your_driver> xif
+	Edit <your_driver>_xif.dtd
+		#filetype,dtd
+		"Device Type",Protocol,"Program ID","Default App","Default Sys","Auto App Load","Auto Sys Load","Graphics File",Default 
+		<your_driver>_device,<your_driver>,<your_device_Program_ID>,,,false,false,,false
+	(For more info on XIF files, please refer to http://iecdocs.diasemi.com/display/PortSSIoT/Collecting+or+Creating+Device+Interface+%28XIF%29+Definitions)
+8.  Using the SmartServer IoT CMS' Device Widget with the SEGMENT CONTROLLER tab selected: 
     * Click on the vertical three dots next to the SmartServer IoT to select the Update menu.
     * Drag and drop the newly created GLPO file into the Update Loader (Drop new update loader here) box, 
     * Click the file icon to save the driver package into the CMS and click the import icon to load the driver to the SmartServer IoT.  Some time later, the new driver will be loaded and running as service (cdriver:<your driver identifier>) under Supervisorctl.
-10. Using the CMS' Device Type Widget: 
+9. 	Using the CMS' Device Type Widget: 
 	  * Click on the Import device type icon and then drag and drop the example_xif.xpl (<driver identifier>_xif.ext) file into the "DROP FILE HERE" box and click on the IMPORT FILE button to load the XIF file to the SmartServer IoT.
     * Click on the BACK button and wait until the device type shows up in the Device Type Widget.
-11. Using the SmartServer IoT CMS' Device Widget with the EDGE DEVICES tab selected:
+10. Using the SmartServer IoT CMS' Device Widget with the EDGE DEVICES tab selected:
 	  * Click on the "+" button to create a device with the following info:
 		  name: <your device name>_1,  UID: 001, Integration Method: Manual assignment, Driver: <your driver identifier>, and select the one and only available device types and click the SAVE button.
 	    Wait until the newly created device shows up in the Device Widget and shown in blue (not purple color).
     * Click on the three vertical dots next to the newly created device and select Provision menu.
-12. Using the Datapoint Browser Widget, you can browse the datapoint values.  If you are using the attached
-    exampl_xif.xpl XIF file, this example/ETI driver specific rule apply:
+11. Using the Datapoint Browser Widget, you can browse the datapoint values.  If you are using the attached
+    example_xif.xpl XIF file, this example/ETI driver specific rules apply:
 	  * Device's unid (Name under CMS Devices Widget) is mapped to ETI's %dev_uid
 	  * Datapoint name designation RO=ReadOnly and RW-Read/Write access
 	  * In ETI, Address field in XIF file designate the device reg index and mapped to ETI's $reg_index.  (This 

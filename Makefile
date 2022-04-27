@@ -12,12 +12,12 @@ CDDEVLIMIT=10
 CDVERSION=1.00.001
 # CDEXTENSION:    driver XIF file extension
 CDEXTENSION=".xpl"
-# CDCOPYRIGHT:    driver copy right string
-CDCOPYRIGHT="Copyright 2019 - 2022 ACME Corp.  All Rights Reserved."
 # CDMANUFACTURER: driver manufacturer
 CDMANUFACTURER="ACME Corporation"
+# CDCOPYRIGHT:    driver copyright string
+CDCOPYRIGHT="Copyright 2019 - 2022 $(CDMANUFACTURER).  All Rights Reserved."
 # CDLICENSE:      driver license string/info
-CDLICENSE="ACME $(CDNAME) Custom Driver License"
+CDLICENSE="$(CDNAME) Custom Driver License"
 # CDSOURCES:      driver's list of source files to compile & build
 CDSOURCES=src/example.cpp src/eti.cpp
 # CDINCETI:	      to exclude ETI example, clear the following line
