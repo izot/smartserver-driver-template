@@ -85,28 +85,26 @@ Create and test a custom driver for the SmartServer IoT by following these steps
 	    mapping of Address field to device's reg index is only specific to ETI implementation.  In other driver
 		implementations, the Address field may be used differently such as to map a given device type to device's 
 		I/O port via the Address field.) 
-	    **ETI protocol syntax** is as follow: eti/<**your_driver**>/[**rd**|**wr**|**ev**]/dev/**$dev_uid**/reg/**$reg_id**  **$data_value**
+	    **ETI protocol syntax** is as follow: eti/<**your_driver**\>/[**rd**|**wr**|**ev**]/dev/**$dev_uid**/reg/**$reg_id**  **$data_value**
 	  * Datapoints with the same Address field share the same reg index: one designated with RW and the other RO
 	  * COUNTER_RO and COUNTER_RW with Address 0 are mapped to physical address/reg 0
 	  * COUNTER_RO gets its value via the use of XIF Address/Reg & custom/unrecognized column "TestMultiplier".  It
 	    basically takes the value written by COUNTER_RW in Reg 0 and multiply it by the value in "TestMultiplier".
 	  * Counter2_RO with Address 1 is mapped to physical address/reg 1.  We can use the ETI protocol to update the
 	    value of Counter2 by publishing (using mosquitto_pub) to the following MQTT topic: 
-		   **mosquitto_pub -t eti/example/ev/dev/1003/reg/1 -m 30**
+		   >mosquitto_pub -t eti/example/ev/dev/1003/reg/1 -m 30
 	  * Switch1_RO and Switch1_RW with Address 2 are mapped to physical address/reg 2
 	  * SwitchValue_RO and SwitchValue_RW with Address 3 are mapped to physical address/reg 3
 	  * SwitchState_RO and SwitchState_RW with Address 4 are mapped to physical address/reg 4
 	  * All datapoint read from the Datapoints Browser Widget results in the following rd MQTT topic publications:
-	       eti/<your_driver>/rd/dev/$dev_uid/reg/$reg_index
-		NOTE: these read MQTT topic publication will not affect or cause datapoint value update
+	       **eti/<your_driver\>/rd/dev/$dev_uid/reg/$reg_index**
+		>NOTE: these read MQTT topic publication will not affect or cause datapoint value update
 	  * All datapoint write from the Datapoint Browser Widget results in the following wr MQTT topic publications:
-	       eti/<your_driver>/wr/dev/$dev_uid/reg/$reg_index <data payload>
+	       **eti/<your_driver\>/wr/dev/$dev_uid/reg/$reg_index <data payload\>**
 	  * All externally generated ETI MQTT ev topic publications as shown below will results in datapoint updates:
-	       eti/<your_driver>/ev/dev/$dev_uid/reg/$reg_index <data payload>
-	  * <data payload> will be in the JSON form like:
-	    real number value (0, 1, 0.5, 95.5, etc.)
-		boolean (true, false)
-		objects ({"state":value,"value":value}, {"Name": "Apple","Price": 3.99,"Sizes":"Small"}, etc.)
- 
-
-
+	       **eti/<your_driver\>/ev/dev/$dev_uid/reg/$reg_index <data payload\>**
+	  * <data payload\> will be in the JSON form like:
+	    * real number value (0, 1, 0.5, 95.5, etc.)
+	    * boolean (true, false)
+	    * objects ('{"state":value,"value":value}', '{"Name": "Apple","Price": 3.99,"Sizes":"Small"}', etc.)
+            
