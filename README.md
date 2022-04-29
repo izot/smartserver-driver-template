@@ -6,7 +6,9 @@ Example custom driver template for the Dialog SmartServer IoT Edge Server (Dialo
 Create and test a custom driver for the SmartServer IoT by following these steps:
 1.  Console login to (or ssh into) your SmartServer IoT and make sure the git application is already install on the system.  
 	If not, do the following:
-		``sudo apt-get install git``
+	```
+	sudo apt-get update
+	sudo apt-get install -y git
 2.  Clone the IDL example at this URL: https://github.com/izot/smartserver-driver-template.git into your 
     SmartServer IoT as follow:
 	```
