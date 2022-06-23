@@ -3,7 +3,7 @@ Example custom driver template for the Dialog SmartServer IoT Edge Server (Dialo
 
 **This project requires SmartServer 3.4 or newer.**
 
-Create and test a custom driver for the SmartServer IoT by following these steps:
+To create and test a custom driver for the SmartServer IoT follow these steps:
 1.  Console login to (or ssh into) your SmartServer IoT and make sure the git application is already install on the system.  
 	If not, do the following:
 	```
