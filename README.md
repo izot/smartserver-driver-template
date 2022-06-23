@@ -67,20 +67,20 @@ Create and test a custom driver for the SmartServer IoT by following these steps
 		#filetype,dtd
 		"Device Type",Protocol,"Program ID","Default App","Default Sys","Auto App Load","Auto Sys Load","Graphics File",Default 
 		<your_driver>_device,<your_driver>,<your_device_Program_ID>,,,false,false,,false
-8.  Using the SmartServer IoT CMS' Device Widget with the SEGMENT CONTROLLER tab selected: 
-    * Click on the vertical three dots next to the SmartServer IoT to select the Update menu.
-    * Drag and drop the newly created GLPO file into the Update Loader (Drop new update loader here) box, 
-    * Click the file icon to save the driver package into the CMS and click the import icon to load the driver to the SmartServer IoT.  Some time later, the new driver will be loaded and running as service (cdriver:<your driver identifier>) under Supervisorctl.
-9. 	Using the CMS' Device Type Widget: 
-	  * Click on the Import device type icon and then drag and drop the example_xif.xpl (<driver identifier>_xif.ext) file into the "DROP FILE HERE" box and click on the IMPORT FILE button to load the XIF file to the SmartServer IoT.
-    * Click on the BACK button and wait until the device type shows up in the Device Type Widget.
-10. Using the SmartServer IoT CMS' Device Widget with the EDGE DEVICES tab selected:
-	  * Click on the "+" button to create a device with the following info:
+8.  Open the SmartServer CMS Devices widget and then click the Segment Controller tab.
+9.  Click the vertical three dots next to the SmartServer.
+10. Click the Update actopm.
+11. Drag the newly created GLPO file into the Update Loader (Drop new update loader here) box.
+12. Click the file icon to save the driver package into the CMS and then click the import icon to load the driver to the SmartServer.  The SmartServer will load and run the new driver as a service (cdriver:<your driver identifier>) under Supervisorctl.
+13. Open the CMS Device Types widget.
+14. Click on Import Device Type buitton and then drag the example_xif.xpl (<driver identifier>_xif.ext) file to the "DROP FILE HERE" box and click on the IMPORT FILE button to load the XIF file to the SmartServer
+15. Click the Back button and wait until the device type appears in the Device Types widget.
+16. Open the SmartServer CMS Devices widget and then click the Edge Devices tab.
+17. Click the "+" button to create a device with the following settings:
 		  name: <your device name>_1,  UID: 001, Integration Method: Manual assignment, Driver: <your driver identifier>, and select the one and only available device types and click the SAVE button.
-	    Wait until the newly created device shows up in the Device Widget and shown in blue (licensed, not purple - unlicensed) color.
-    * Click on the three vertical dots next to the newly created device and select the Provision menu.
-11. Using the Datapoint Browser Widget, you can browse the datapoint values.  If you are using the attached
-    example_xif.xpl XIF file, this example/ETI driver specific rules apply:
+	    Wait until the newly created device appears in the Devices widget and is shown in blue (licensed, not purple - unlicensed) color.
+18. Click the three vertical dots next to the newly created device and then select the Provision action.
+19. Using the Datapoints widget, you can browse the datapoint values.  If you are using the attached example_xif.xpl XIF file, this example/ETI driver specific rules apply:
 	  * Device's unid (Name under CMS Devices Widget) is mapped to ETI's $dev_uid
 	  * Datapoint name designation RO=ReadOnly and RW-Read/Write access
 	  * In ETI, the Address column in XIF file designates the device reg index and mapped to ETI's $reg_index.  (This 
