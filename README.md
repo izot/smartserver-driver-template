@@ -4,13 +4,12 @@ Example custom driver template for the Dialog SmartServer IoT Edge Server (Dialo
 **This project requires SmartServer 3.4 or newer.**
 
 To create and test a custom driver for the SmartServer IoT follow these steps:
-1.  Console login to (or ssh into) your SmartServer IoT and make sure the git application is already install on the system.  
-	If not, do the following:
-	```
+1.  Open a Linux console for your SmartServer.
+2.  If thhe git application is not already installed, enter the following commands:
 	sudo apt-get update
 	sudo apt-get install -y git
 2.  Clone the IDL example at this URL: https://github.com/izot/smartserver-driver-template.git into your 
-    SmartServer IoT as follow:
+    SmartServer as follow:
 	```
 	> git clone https://github.com/izot/smartserver-driver-template.git
 	You should see the following folders/files (not all files/folder are listed below... and they should be ignored):
@@ -36,7 +35,7 @@ To create and test a custom driver for the SmartServer IoT follow these steps:
 		│   └── main.cpp
 		└── ...
 		5 directories, 25 files
-3.  Using an editor open the Makefile and change the driver to a driver-specific information as needed:
+3.  Using an editor open the makefile and change the driver to a driver-specific information as needed:
 	The driver identifier, driver name, description, manufacturer, license, version, filetype and file extension.
     >**NOTE:** _Currently there is no support for **C**amel**C**ase naming convention for driver name._
 4.  Add any required additional components such as a protocol stack to the build script.
