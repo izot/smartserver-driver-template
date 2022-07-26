@@ -37,7 +37,7 @@ To create and test a custom driver for the SmartServer follow these steps:
 		5 directories, 25 files
 3.  Using an editor open the makefile and change the driver to a driver-specific information as needed:
 	The driver identifier, driver name, description, manufacturer, license, version, filetype and file extension.
-    >**NOTE:** _There is no support for **C**amel**C**ase naming convention for driver name._
+    >**NOTE:** _There is no support for **C**amel**C**ase naming convention for the driver name._
 4.  Add any required additional components such as a protocol stack to the build script.
 5.  If necessary, change/add/complete the implementation of the required call-back functions.  The example driver
     provides a minimum implementation required to do device creation, provisioning, deletion and reading/writing of datapoints.
