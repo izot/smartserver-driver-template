@@ -1,5 +1,5 @@
 # smartserver-driver-template
-Developers can create custom drivers for the SmartServer IoT using the custom driver template in this project. The procedure for developing a custom driver is described on this page.  Additional documentation is available at http://iecdocs.renesas.com.
+Developers can create custom drivers for the SmartServer IoT using the custom driver template in this project. The procedure for developing a custom driver is described on this page.  Additional documentation is available at https://edgedocs.enocean.com.
 
 ** This project requires SmartServer 3.4 or newer. **
 
