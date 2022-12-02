@@ -5,7 +5,7 @@ Developers can create custom drivers for the SmartServer IoT using the custom dr
 
 To create and test a custom driver for the SmartServer follow these steps:
 1.  Open a Linux console for your SmartServer.
-2.  If thhe git application is not already installed, enter the following commands:
+2.  If the git application is not already installed, enter the following commands:
 	sudo apt-get update
 	sudo apt-get install -y git
 2.  Clone the IDL example at https://github.com/izot/smartserver-driver-template.git to your 
