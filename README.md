@@ -54,7 +54,8 @@ To create and test a custom driver for the SmartServer follow these steps:
 		│       └── image ...
 		│           └── ...
 7.  Create a new driver-specific XIF file by copying and modifying the example_xif.xpl & example_xif.dtd (csv) files found in the 
-    smartserver-driver-template project below.  For more info on XIF files, see http://iecdocs.renesas.com/display/PortSSIoT/Collecting+or+Creating+Device+Interface+%28XIF%29+Definitions
+    smartserver-driver-template project below.  For more info on XIF files, see 
+    https://enoceanwiki.atlassian.net/wiki/spaces/IEC/pages/2196199/Collecting+or+Creating+Device+Definitions
 	```     
 	Edit <your_driver>_xif.xpl
 		#filetype,<your_driver>_xif
