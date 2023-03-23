@@ -37,11 +37,11 @@ chown apollo:apollo $APOLLO_CONFD/scripts/reset.d/$CDNAME-reset.sh
 chmod u=rwx,g=rwx,o=rx $APOLLO_CONFD/scripts/reset.d/$CDNAME-reset.sh
 
 echo setting up $CDNAME service
-cp -f $CDNAME.conf /etc/supervisor/conf.d/$CDNAME.conf
-chown :apollo /etc/supervisor/conf.d/$CDNAME.conf
-chmod u=rwx,g=rw,o=r /etc/supervisor/conf.d/$CDNAME.conf
-CDRIVERCONF=/etc/supervisor/conf.d/cdriver.conf
-CDRIVERCONFTEMPLATE=cdriver.conf
+cp -f $CDNAME.service /lib/systemd/system/smartserver-$CDNAME.service
+chown :apollo /lib/systemd/system/smartserver-$CDNAME.service
+chmod u=rwx,g=rw,o=r /lib/systemd/system/smartserver-$CDNAME.service
+CDRIVERCONF=/lib/systemd/system/cdriver.service
+CDRIVERCONFTEMPLATE=cdriver.service
 if [ -f $CDRIVERCONF ]; then
     grep -qw $CDNAME $CDRIVERCONF
     if [ $? -ne 0 ]; then 
@@ -56,7 +56,9 @@ else
 fi
 chown :apollo $CDRIVERCONF
 chmod u=r,g=r,o=r $CDRIVERCONF 
-supervisorctl update
+smartserverctl reload 
+smartserverctl enable smartserver-$CDNAME
+smartserverctl start $CDNAME
 
 popd
 echo $CDNAME service setup completed

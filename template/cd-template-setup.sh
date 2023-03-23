@@ -15,7 +15,7 @@ then
       cp -f $FNAME $DESTPATH
       chown apollo:apollo $DESTPATH/$BASENAME
       chmod 664 $DESTPATH/$BASENAME
-      supervisorctl restart $SERVICENAME
+      smartserverctl restart $SERVICENAME
       exit 0
    else
       echo Destination path $DESTPATH does not exist

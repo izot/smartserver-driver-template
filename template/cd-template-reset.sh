@@ -4,7 +4,7 @@ CDNAME=INSERT_CDNAME
 CDPATH=$APOLLO_DATA/$CDNAME
 SETUPFILE=$APOLLO_CONFD/scripts/setup.d/$CDNAME-xif-setup.sh
 ONBOOTFILE=$APOLLO_CONFD/scripts/onboot.d/$CDNAME-onboot.sh
-SUPERVISORFILE=/etc/supervisor/conf.d/$CDNAME.conf
+SERVICE_FILE=/lib/systemd/system/smartserver-$CDNAME.service
 
 MODE=$1
 
@@ -16,11 +16,11 @@ function finish {
 }
 
 if [ "$MODE" == "factory" ]; then
-    if [ -f $SUPERVISORFILE ]; then
-        echo $0: Deleting $SUPERVISORFILE and stopping the service
-        rm -f $SUPERVISORFILE
+    if [ -f $SERVICE_FILE ]; then
+        echo $0: Deleting $SERVICE_FILE and stopping the service
+        rm -f $SERVICE_FILE
     fi
-    CDRIVERCONF=/etc/supervisor/conf.d/cdriver.conf
+    CDRIVERCONF=$SERVICE_FILE
     if [ -f $CDRIVERCONF ]; then
         grep -qw $CDNAME $CDRIVERCONF
         if [ $? -eq 0 ]; then
@@ -39,7 +39,9 @@ if [ "$MODE" == "factory" ]; then
     else
         echo $0: $CDRIVERCONF not found.
     fi
-    supervisorctl update
+    smartserverctl reload 
+    smartserverctl enable smartserver-$CDNAME
+    smartserverctl restart $CDNAME
     if [ -d $CDPATH ]; then
         echo $0: Deleting $CDPATH
         rm -rf $CDPATH

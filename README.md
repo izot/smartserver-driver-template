@@ -71,7 +71,7 @@ To create and test a custom driver for the SmartServer follow these steps:
 9.  Click the action button (vertical three dots next to the SmartServer).
 10. Click the Update action.
 11. Drag the newly created GLPO file to the Update Loader (Drop new update loader here) box.
-12. Click the file button to save the driver package file to the SmartServer and then click the import button to load the driver to the SmartServer.  The SmartServer will load and run the new driver as a service (cdriver:<your driver identifier>) under Supervisorctl.
+12. Click the file button to save the driver package file to the SmartServer and then click the import button to load the driver to the SmartServer.  The SmartServer will load and run the new driver as a service (cdriver:<your driver identifier>) under Smartserverctl.
 13. Open the CMS Device Types widget.
 14. Click the Import Device Type buitton and then drag the example_xif.xpl (<driver identifier>_xif.ext) file to the Drop File Here box and click the Import File button to load the XIF file to the SmartServer.
 15. Click the Back button and wait until the device type appears in the Device Types widget.
